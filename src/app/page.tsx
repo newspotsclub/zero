@@ -79,9 +79,27 @@ export default function Home() {
                   className="object-cover"
                   sizes="(max-width: 768px) 50vw, 33vw"
                 />
+                <div
+                  className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/80 to-transparent"
+                  aria-hidden
+                />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 p-3 text-white">
+                  <p className="text-sm font-medium leading-tight">{spot.name}</p>
+                  <p className="text-xs text-white/85">{spot.city}</p>
+                </div>
               </a>
             ))}
           </div>
+
+          <footer className="mt-10 border-t border-neutral-200 pt-6 pb-2 text-xs text-neutral-600 md:mt-12">
+            <p>NewSpots.club. A curated list of new spots to explore in and around you.</p>
+            <a
+              href="mailto:hello@newspots.club"
+              className="mt-1 inline-block text-neutral-900 underline decoration-neutral-400 underline-offset-4 hover:decoration-neutral-900"
+            >
+              Add your place.
+            </a>
+          </footer>
         </div>
       </main>
     </div>
