@@ -20,7 +20,29 @@ type SpotStatus = {
   visited: boolean;
 };
 
-const fallbackSpots = spotsData.spots as Spot[];
+type SeedLocation = {
+  area: string;
+  mapsLink: string;
+  latLng?: string;
+};
+
+type SeedSpot = {
+  image?: string;
+  name: string;
+  latLng?: string;
+  locations?: SeedLocation[];
+};
+
+const fallbackSpots: Spot[] = (spotsData.spots as SeedSpot[]).flatMap(
+  (spot) =>
+    (spot.locations ?? []).map((location) => ({
+      image: spot.image,
+      name: spot.name,
+      city: location.area,
+      mapsLink: location.mapsLink,
+      latLng: location.latLng ?? spot.latLng,
+    })),
+);
 const FAVORITES_FILTER = "__favorites__";
 const VISITED_FILTER = "__visited__";
 
