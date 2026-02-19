@@ -321,6 +321,11 @@ export default function Home() {
                 type="button"
                 onClick={() => setSelectedCity(option.value)}
                 className={`shrink-0 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                  option.value === FAVORITES_FILTER ||
+                  option.value === VISITED_FILTER
+                    ? "animate-pill-enter"
+                    : ""
+                } ${
                   selectedCity === option.value
                     ? option.value === FAVORITES_FILTER
                       ? "border-rose-200 bg-rose-100 text-rose-700"
