@@ -1,0 +1,57 @@
+name: DB Migration Guard
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/config.toml"
+      - "scripts/verify-db.mjs"
+      - ".github/workflows/db-migration-guard.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/config.toml"
+      - "scripts/verify-db.mjs"
+      - ".github/workflows/db-migration-guard.yml"
+
+concurrency:
+  group: db-migration-guard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-migrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase
+        run: npx supabase start -x logflare,vector,imgproxy
+
+      - name: Replay migrations on clean DB
+        run: npx supabase db reset
+
+      - name: Verify schema safeguards
+        run: npm run db:verify
+
+      - name: Stop local Supabase
+        if: always()
+        run: npx supabase stop

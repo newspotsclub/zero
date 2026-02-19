@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "New Spots Club — New places to visit in Bengaluru",
+  title: "New Spots Club",
   description: "Discover new spots nearby worth visiting.",
 };
 

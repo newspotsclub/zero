@@ -4,12 +4,23 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:full": "./dev.sh",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "supabase:start": "npx supabase start -x logflare,vector,imgproxy",
+    "supabase:stop": "npx supabase stop",
+    "db:reset:local": "npx supabase db reset",
+    "db:verify": "node ./scripts/verify-db.mjs",
+    "db:check:staging": "bash scripts/check-staging-db.sh",
+    "db:push:staging": "bash scripts/supabase-promote.sh staging",
+    "db:push:production": "bash scripts/supabase-promote.sh production",
+    "db:push:production:confirm": "npm run db:check:staging && SUPABASE_PROD_CONFIRM=YES bash scripts/supabase-promote.sh production"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.96.0",
     "next": "16.1.6",
+    "postgres": "^3.4.8",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
