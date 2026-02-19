@@ -371,7 +371,7 @@ export default function Home() {
           </div>
 
           <footer className="mt-10 border-t border-neutral-200 pt-6 pb-2 text-xs text-neutral-600 md:mt-12">
-            <p>NewSpots.club. A curated list of new spots to explore in and around you.</p>
+            <p>A curated list of new spots to explore in and around you.</p>
             <a
               href="mailto:hello@newspots.club"
               className="mt-1 inline-block text-neutral-900 underline decoration-neutral-400 underline-offset-4 hover:decoration-neutral-900"
