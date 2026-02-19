@@ -570,6 +570,10 @@ export default function Home() {
 
           {!isSpotsLoading && totalCount > PAGE_SIZE ? (
             <div className="mt-6 flex items-center justify-between gap-3">
+              <p className="text-xs text-neutral-600">
+                Showing {(page - 1) * PAGE_SIZE + 1}-
+                {Math.min(page * PAGE_SIZE, totalCount)} of {totalCount}
+              </p>
               <button
                 type="button"
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
