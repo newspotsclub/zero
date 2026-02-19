@@ -373,72 +373,83 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-black">
-      <main className="px-4 py-6 md:px-8 md:py-8">
+    <div className="relative min-h-screen overflow-hidden bg-[#f5f5f2] text-neutral-900">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(0,0,0,0.04),transparent_45%),linear-gradient(to_bottom,rgba(255,255,255,0.45),rgba(0,0,0,0.015))]" />
+      <main className="relative px-4 py-6 md:px-8 md:py-8">
         <div className="mx-auto max-w-6xl">
-          <div className="mb-5 flex items-center justify-between gap-3 md:mb-7">
-            <div>
-              <h1 className="text-lg font-semibold">NewSpots.club</h1>
-              <p className="text-xs text-neutral-600">
-                Save your favorite and visited places.
-              </p>
-            </div>
+          <div className="mb-8 border-b border-black/20 pb-4 md:mb-10">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+              <div>
+                <h1 className="font-mono text-base uppercase tracking-[0.22em]">
+                  NewSpots.club
+                </h1>
+                <p className="mt-1 text-xs text-neutral-600">
+                  Save favorites and visited places.
+                </p>
+              </div>
 
-            {sessionLoading ? (
-              <p className="text-xs text-neutral-500">Checking session...</p>
-            ) : userId ? (
-              <div className="flex items-center gap-2">
-                <p className="hidden text-xs text-neutral-600 sm:block">{userEmail}</p>
-                {isAdmin ? (
-                  <Link
-                    href="/admin"
-                    className="rounded-full border border-neutral-300 px-3 py-1 text-xs hover:border-black"
+              {sessionLoading ? (
+                <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-neutral-500">
+                  Checking session...
+                </p>
+              ) : userId ? (
+                <div className="flex items-center gap-3">
+                  <p className="hidden max-w-44 truncate font-mono text-[10px] uppercase tracking-[0.12em] text-neutral-500 sm:block">
+                    {userEmail}
+                  </p>
+                  {isAdmin ? (
+                    <Link
+                      href="/admin"
+                      className="font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-600 underline decoration-black/25 underline-offset-4 transition hover:text-black hover:decoration-black"
+                    >
+                      Admin
+                    </Link>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    className="font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-600 underline decoration-black/25 underline-offset-4 transition hover:text-black hover:decoration-black"
                   >
-                    Admin
+                    Sign out
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  {!supabaseConfigured ? (
+                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-red-700">
+                      Supabase not set
+                    </span>
+                  ) : null}
+                  <Link
+                    href="/login"
+                    className="font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-700 underline decoration-black/25 underline-offset-4 transition hover:text-black hover:decoration-black"
+                  >
+                    Login
                   </Link>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={handleSignOut}
-                  className="rounded-full border border-neutral-300 px-3 py-1 text-xs hover:border-black"
-                >
-                  Sign out
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                {!supabaseConfigured ? (
-                  <span className="text-xs text-red-600">Supabase not set</span>
-                ) : null}
-                <Link
-                  href="/login"
-                  className="rounded-full border border-black bg-black px-3 py-1 text-xs text-white"
-                >
-                  Login
-                </Link>
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
 
           {saveError ? (
-            <p className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            <p className="mb-4 border border-red-700/35 bg-red-50/70 px-3 py-2 text-xs text-red-700">
               {saveError}
             </p>
           ) : null}
 
           {spotsError ? (
-            <p className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            <p className="mb-4 border border-red-700/35 bg-red-50/70 px-3 py-2 text-xs text-red-700">
               {spotsError}
             </p>
           ) : null}
 
-          <div className="mb-6 flex gap-1.5 overflow-x-auto pb-1 md:mb-8 md:flex-wrap md:overflow-visible">
+          <div className="mb-7 flex gap-2 overflow-x-auto pb-1 md:mb-9 md:flex-wrap md:overflow-visible">
             {filterOptions.map((option, optionIndex) => (
               <button
                 key={`${option.value}-${optionIndex}`}
                 type="button"
                 onClick={() => handleFilterChange(option.value)}
-                className={`shrink-0 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                className={`shrink-0 border px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em] transition ${
                   option.value === FAVORITES_FILTER ||
                   option.value === VISITED_FILTER
                     ? "animate-pill-enter"
@@ -446,11 +457,11 @@ export default function Home() {
                 } ${
                   activeFilter === option.value
                     ? option.value === FAVORITES_FILTER
-                      ? "border-rose-200 bg-rose-100 text-rose-700"
+                      ? "border-red-700/30 bg-red-50 text-red-700"
                       : option.value === VISITED_FILTER
                         ? "border-emerald-700 bg-emerald-700 text-white"
                         : "border-black bg-black text-white"
-                    : "border-neutral-300 bg-white text-neutral-600 hover:border-neutral-400 hover:text-black"
+                    : "border-black/20 bg-white/60 text-neutral-600 hover:border-black hover:text-black"
                 }`}
               >
                 {option.label}
@@ -463,7 +474,7 @@ export default function Home() {
               {Array.from({ length: PAGE_SIZE }).map((_, index) => (
                 <div
                   key={`spot-loader-${index}`}
-                  className="aspect-[4/5] animate-pulse rounded-2xl border border-neutral-200 bg-neutral-100"
+                  className="aspect-[4/5] animate-pulse border border-black/15 bg-white/60"
                 />
               ))}
             </div>
@@ -475,10 +486,10 @@ export default function Home() {
                   href={spot.mapsLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_4px_14px_rgba(0,0,0,0.08)] transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(0,0,0,0.12)]"
+                  className="group relative aspect-[4/5] w-full overflow-hidden border border-black/20 bg-white/50 transition hover:border-black"
                 >
                   {userId ? (
-                    <div className="absolute top-2 inset-x-2 z-10 flex items-center justify-between">
+                    <div className="absolute inset-x-2 top-2 z-10 flex items-center justify-between">
                       <button
                         type="button"
                         onClick={(event) => {
@@ -494,16 +505,16 @@ export default function Home() {
                             ? "Remove from favorites"
                             : "Add to favorites"
                         }
-                        className={`rounded-full p-2 ${
+                        className={`grid h-8 w-8 place-items-center border transition ${
                           statuses[getSpotKey(spot)]?.favorite
-                            ? "bg-rose-100 text-rose-700"
-                            : "bg-white/85 text-black"
+                            ? "border-red-700/60 bg-red-50 text-red-700"
+                            : "border-black/20 bg-white/85 text-black"
                         }`}
                       >
                         <svg
                           viewBox="0 0 24 24"
                           aria-hidden="true"
-                          className="h-5 w-5"
+                          className="h-4 w-4"
                           fill={
                             statuses[getSpotKey(spot)]?.favorite
                               ? "currentColor"
@@ -529,7 +540,7 @@ export default function Home() {
                           void toggleSpotStatus(spot, "visited", !current);
                         }}
                         disabled={savingKey === `${getSpotKey(spot)}:visited`}
-                        className={`rounded-full px-2 py-1 text-xs font-medium ${
+                        className={`px-2 py-1 font-mono text-[10px] uppercase tracking-[0.13em] ${
                           statuses[getSpotKey(spot)]?.visited
                             ? "bg-emerald-700 text-white"
                             : "bg-white/85 text-black"
@@ -539,7 +550,7 @@ export default function Home() {
                       </button>
                     </div>
                   ) : (
-                    <div className="absolute top-2 right-2 z-10 rounded-full bg-white/90 px-2 py-1 text-[10px] font-medium text-neutral-700">
+                    <div className="absolute right-2 top-2 z-10 bg-white/90 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.13em] text-neutral-700">
                       Login to save
                     </div>
                   )}
@@ -548,7 +559,7 @@ export default function Home() {
                     src={getSpotImageUrl(spot)}
                     alt={spot.name}
                     fill
-                    className="object-cover"
+                    className="object-cover transition duration-300 group-hover:scale-[1.02]"
                     sizes="(max-width: 768px) 50vw, 33vw"
                   />
                   <div
@@ -557,50 +568,52 @@ export default function Home() {
                   />
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 p-3 text-white">
                     <p className="text-sm font-medium leading-tight">{spot.name}</p>
-                    <p className="text-xs text-white/85">{spot.city}</p>
+                    <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-white/90">
+                      {spot.city}
+                    </p>
                   </div>
                 </a>
               ))}
             </div>
           ) : (
-            <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-6 text-sm text-neutral-600">
+            <div className="border border-black/20 bg-white/60 p-6 text-sm text-neutral-600">
               No spots found for this filter.
             </div>
           )}
 
           {!isSpotsLoading && totalCount > PAGE_SIZE ? (
-            <div className="mt-6 flex items-center justify-between gap-3">
-              <p className="text-xs text-neutral-600">
+            <div className="mt-7 grid grid-cols-2 items-center gap-2 text-xs text-neutral-600 md:grid-cols-4">
+              <p className="md:col-span-2">
                 Showing {(page - 1) * PAGE_SIZE + 1}-
                 {Math.min(page * PAGE_SIZE, totalCount)} of {totalCount}
               </p>
-              <button
-                type="button"
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-                disabled={page <= 1}
-                className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-700 disabled:opacity-50"
-              >
-                Previous
-              </button>
-              <p className="text-xs text-neutral-600">
-                Page {page} of {totalPages}
-              </p>
-              <button
-                type="button"
-                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                disabled={page >= totalPages}
-                className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-700 disabled:opacity-50"
-              >
-                Next
-              </button>
+              <div className="flex items-center gap-2 md:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={page <= 1}
+                  className="border border-black/20 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-700 disabled:opacity-40"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  disabled={page >= totalPages}
+                  className="border border-black/20 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-700 disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+              <p className="text-right">Page {page} of {totalPages}</p>
             </div>
           ) : null}
 
-          <footer className="mt-10 border-t border-neutral-200 pt-6 pb-2 text-xs text-neutral-600 md:mt-12">
+          <footer className="mt-10 border-t border-black/20 pt-6 pb-2 text-xs text-neutral-600 md:mt-12">
             <p>A curated list of new spots to explore in and around you.</p>
             <a
               href="mailto:hello@newspots.club"
-              className="mt-1 inline-block text-neutral-900 underline decoration-neutral-400 underline-offset-4 hover:decoration-neutral-900"
+              className="mt-1 inline-block font-mono text-[11px] uppercase tracking-[0.13em] text-neutral-900 underline decoration-black/35 underline-offset-4 hover:decoration-black"
             >
               Add your place.
             </a>
