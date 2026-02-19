@@ -21,6 +21,8 @@ type SpotStatus = {
 };
 
 const fallbackSpots = spotsData.spots as Spot[];
+const FAVORITES_FILTER = "__favorites__";
+const VISITED_FILTER = "__visited__";
 
 function parseLatLng(latLng: string): { lat: number; lng: number } | null {
   const parts = latLng.split(",").map((s) => parseFloat(s.trim()));
@@ -63,11 +65,44 @@ export default function Home() {
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const cities = ["All", ...new Set(spots.map((s) => s.city).sort())];
+  const hasFavoriteSpots = spots.some(
+    (spot) => Boolean(userId && statuses[getSpotKey(spot)]?.favorite),
+  );
+  const hasVisitedSpots = spots.some(
+    (spot) => Boolean(userId && statuses[getSpotKey(spot)]?.visited),
+  );
+  const filterOptions = [
+    { label: "All", value: "All" },
+    ...(userId
+      ? [
+          ...(hasFavoriteSpots
+            ? [{ label: "Favorites", value: FAVORITES_FILTER }]
+            : []),
+          ...(hasVisitedSpots
+            ? [{ label: "Visited", value: VISITED_FILTER }]
+            : []),
+        ]
+      : []),
+    ...cities
+      .filter((city) => city !== "All")
+      .map((city) => ({ label: city, value: city })),
+  ];
+  const activeFilter =
+    !userId &&
+    (selectedCity === FAVORITES_FILTER || selectedCity === VISITED_FILTER)
+      ? "All"
+      : selectedCity;
 
-  const filteredSpots =
-    selectedCity === "All"
-      ? spots
-      : spots.filter((s) => s.city === selectedCity);
+  const filteredSpots = spots.filter((spot) => {
+    if (activeFilter === "All") return true;
+    if (activeFilter === FAVORITES_FILTER) {
+      return Boolean(userId && statuses[getSpotKey(spot)]?.favorite);
+    }
+    if (activeFilter === VISITED_FILTER) {
+      return Boolean(userId && statuses[getSpotKey(spot)]?.visited);
+    }
+    return spot.city === activeFilter;
+  });
 
   useEffect(() => {
     const supabase = getSupabaseClient();
@@ -280,33 +315,37 @@ export default function Home() {
           ) : null}
 
           <div className="mb-6 flex gap-1.5 overflow-x-auto pb-1 md:mb-8 md:flex-wrap md:overflow-visible">
-            {cities.map((city) => (
+            {filterOptions.map((option, optionIndex) => (
               <button
-                key={city}
+                key={`${option.value}-${optionIndex}`}
                 type="button"
-                onClick={() => setSelectedCity(city)}
+                onClick={() => setSelectedCity(option.value)}
                 className={`shrink-0 rounded-full border px-2.5 py-1 text-xs transition-colors ${
-                  selectedCity === city
-                    ? "border-black bg-black text-white"
+                  selectedCity === option.value
+                    ? option.value === FAVORITES_FILTER
+                      ? "border-rose-200 bg-rose-100 text-rose-700"
+                      : option.value === VISITED_FILTER
+                        ? "border-emerald-700 bg-emerald-700 text-white"
+                        : "border-black bg-black text-white"
                     : "border-neutral-300 bg-white text-neutral-600 hover:border-neutral-400 hover:text-black"
                 }`}
               >
-                {city}
+                {option.label}
               </button>
             ))}
           </div>
 
           <div className="grid grid-cols-2 gap-2 md:grid-cols-3 md:gap-4">
-            {filteredSpots.map((spot, i) => (
+            {filteredSpots.map((spot) => (
               <a
-                key={`${spot.city}-${i}`}
+                key={`${getSpotKey(spot)}-${spot.mapsLink}`}
                 href={spot.mapsLink}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_4px_14px_rgba(0,0,0,0.08)] transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(0,0,0,0.12)]"
               >
                 {userId ? (
-                  <div className="absolute top-2 right-2 z-10 flex gap-1">
+                  <div className="absolute top-2 inset-x-2 z-10 flex items-center justify-between">
                     <button
                       type="button"
                       onClick={(event) => {
@@ -317,13 +356,34 @@ export default function Home() {
                         void toggleSpotStatus(spot, "favorite", !current);
                       }}
                       disabled={savingKey === `${getSpotKey(spot)}:favorite`}
-                      className={`rounded-full px-2 py-1 text-xs font-medium ${
+                      aria-label={
                         statuses[getSpotKey(spot)]?.favorite
-                          ? "bg-black text-white"
+                          ? "Remove from favorites"
+                          : "Add to favorites"
+                      }
+                      className={`rounded-full p-2 ${
+                        statuses[getSpotKey(spot)]?.favorite
+                          ? "bg-rose-100 text-rose-700"
                           : "bg-white/85 text-black"
                       }`}
                     >
-                      Favorite
+                      <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        className="h-5 w-5"
+                        fill={
+                          statuses[getSpotKey(spot)]?.favorite
+                            ? "currentColor"
+                            : "none"
+                        }
+                        stroke="currentColor"
+                        strokeWidth="1.75"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M11.995 21.35a.75.75 0 0 1-.522-.216l-1.884-1.792c-4.08-3.88-6.8-6.468-6.8-9.63 0-2.578 2.007-4.545 4.57-4.545 1.62 0 3.177.8 4.136 2.043.959-1.242 2.517-2.043 4.136-2.043 2.563 0 4.57 1.967 4.57 4.545 0 3.162-2.72 5.75-6.8 9.63l-1.884 1.792a.75.75 0 0 1-.522.216z" />
+                      </svg>
+                      <span className="sr-only">Favorite</span>
                     </button>
 
                     <button
