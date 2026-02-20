@@ -27,7 +27,8 @@ This is a [Next.js](https://nextjs.org) project with Supabase auth and user-spec
    - `SUPABASE_STAGING_PROJECT_REF`
    - `SUPABASE_PRODUCTION_PROJECT_REF`
    - `SUPABASE_STAGING_DATABASE_URL`
-4. Apply migrations:
+4. In Supabase Auth URL settings, add your app URLs (for example `http://localhost:3000` and production URL) to Site URL / Redirect URLs so email magic links can return to `/login`.
+5. Apply migrations:
    - `npm run db:push:staging` (or run SQL directly in your project for first-time bootstrapping)
 
 ## Development setup (single environment)
@@ -98,4 +99,3 @@ On PRs and pushes touching DB migration files, CI will:
 3. Run `npm run db:verify` (tables + RLS + policy checks)
 
 To enforce this guard, add `verify-migrations` as a required status check in GitHub branch protection for `main`.
-
