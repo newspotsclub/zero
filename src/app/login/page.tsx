@@ -5,32 +5,17 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase";
 
-type Mode = "signin" | "signup";
-
 export default function LoginPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [lastEmailSentTo, setLastEmailSentTo] = useState<string | null>(null);
 
-  const passwordMismatch =
-    mode === "signup" && confirmPassword.length > 0 && password !== confirmPassword;
-  const canSubmit = useMemo(() => {
-    if (!email.trim() || !password) return false;
-    if (mode === "signup") {
-      if (password.length < 6) return false;
-      if (!confirmPassword) return false;
-      if (password !== confirmPassword) return false;
-    }
-    return true;
-  }, [confirmPassword, email, mode, password]);
+  const cleanedEmail = useMemo(() => email.trim().toLowerCase(), [email]);
+  const canSubmit = cleanedEmail.length > 0;
 
   useEffect(() => {
     const supabase = getSupabaseClient();
@@ -47,12 +32,17 @@ export default function LoginPage() {
       }
       setIsCheckingSession(false);
     });
-  }, [router]);
 
-  useEffect(() => {
-    setError(null);
-    setMessage(null);
-  }, [mode]);
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        router.replace("/");
+      }
+    });
+
+    return () => {
+      data.subscription.unsubscribe();
+    };
+  }, [router]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -60,11 +50,7 @@ export default function LoginPage() {
     setMessage(null);
 
     if (!canSubmit) {
-      setError(
-        mode === "signup"
-          ? "Please complete all fields and ensure passwords match."
-          : "Please enter email and password.",
-      );
+      setError("Please enter your email.");
       return;
     }
 
@@ -77,35 +63,23 @@ export default function LoginPage() {
         return;
       }
 
-      if (mode === "signup") {
-        const emailRedirectTo =
-          typeof window !== "undefined"
-            ? `${window.location.origin}/login`
-            : undefined;
+      const emailRedirectTo =
+        typeof window !== "undefined" ? `${window.location.origin}/login` : undefined;
 
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: emailRedirectTo ? { emailRedirectTo } : undefined,
-        });
+      const { error: signInError } = await supabase.auth.signInWithOtp({
+        email: cleanedEmail,
+        options: {
+          emailRedirectTo,
+          shouldCreateUser: true,
+        },
+      });
 
-        if (signUpError) throw signUpError;
+      if (signInError) throw signInError;
 
-        if (data.session) {
-          router.replace("/");
-          return;
-        }
-
-        setMessage("Account created. Check your inbox to verify your email.");
-      } else {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-
-        if (signInError) throw signInError;
-        router.replace("/");
-      }
+      setLastEmailSentTo(cleanedEmail);
+      setMessage(
+        `Magic link sent to ${cleanedEmail}. Open the email and tap the link to log in.`,
+      );
     } catch (caughtError) {
       setError(
         caughtError instanceof Error ? caughtError.message : "Unable to continue.",
@@ -124,36 +98,11 @@ export default function LoginPage() {
             New Spots Club
           </p>
           <h1 className="mt-3 font-mono text-2xl font-medium tracking-tight">
-            {mode === "signin" ? "Welcome back." : "Create account."}
+            Login with a magic link.
           </h1>
           <p className="mt-2 max-w-xs text-sm text-neutral-600">
-            Save favorites and track places you have already visited.
+            Enter your email and we&apos;ll send a one-click sign-in link.
           </p>
-        </div>
-
-        <div className="mb-7 grid grid-cols-2 border border-black/20 p-1">
-          <button
-            type="button"
-            onClick={() => setMode("signin")}
-            className={`px-3 py-2 font-mono text-[11px] uppercase tracking-[0.18em] transition ${
-              mode === "signin"
-                ? "bg-black text-white"
-                : "text-neutral-500 hover:text-black"
-            }`}
-          >
-            Sign in
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("signup")}
-            className={`px-3 py-2 font-mono text-[11px] uppercase tracking-[0.18em] transition ${
-              mode === "signup"
-                ? "bg-black text-white"
-                : "text-neutral-500 hover:text-black"
-            }`}
-          >
-            Create account
-          </button>
         </div>
 
         {isCheckingSession ? (
@@ -178,61 +127,6 @@ export default function LoginPage() {
             />
           </label>
 
-          <label className="block">
-            <span className="mb-2 block font-mono text-[10px] uppercase tracking-[0.2em] text-neutral-500">
-              Password
-            </span>
-            <div className="flex items-center border border-black/25 pr-2 transition focus-within:border-black">
-              <input
-                type={showPassword ? "text" : "password"}
-                autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                minLength={6}
-                required
-                className="w-full border-0 bg-transparent px-3 py-2.5 text-sm outline-none"
-                placeholder="••••••••"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((current) => !current)}
-                className="font-mono text-[10px] uppercase tracking-[0.16em] text-neutral-500 transition hover:text-black"
-              >
-                {showPassword ? "Hide" : "Show"}
-              </button>
-            </div>
-          </label>
-
-          {mode === "signup" ? (
-            <label className="block">
-              <span className="mb-2 block font-mono text-[10px] uppercase tracking-[0.2em] text-neutral-500">
-                Confirm password
-              </span>
-              <div className="flex items-center border border-black/25 pr-2 transition focus-within:border-black">
-                <input
-                  type={showConfirmPassword ? "text" : "password"}
-                  autoComplete="new-password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  minLength={6}
-                  required
-                  className="w-full border-0 bg-transparent px-3 py-2.5 text-sm outline-none"
-                  placeholder="••••••••"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword((current) => !current)}
-                  className="font-mono text-[10px] uppercase tracking-[0.16em] text-neutral-500 transition hover:text-black"
-                >
-                  {showConfirmPassword ? "Hide" : "Show"}
-                </button>
-              </div>
-              {passwordMismatch ? (
-                <p className="mt-2 text-xs text-red-700">Passwords do not match.</p>
-              ) : null}
-            </label>
-          ) : null}
-
           {error ? (
             <p className="border border-red-700/35 bg-red-50/70 px-3 py-2 text-sm text-red-700">
               {error}
@@ -250,12 +144,14 @@ export default function LoginPage() {
             disabled={isSubmitting || isCheckingSession || !canSubmit}
             className="w-full bg-black px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSubmitting
-              ? "Please wait..."
-              : mode === "signin"
-                ? "Sign in"
-                : "Create account"}
+            {isSubmitting ? "Sending link..." : "Send magic link"}
           </button>
+
+          {lastEmailSentTo ? (
+            <p className="text-xs text-neutral-600">
+              Didn&apos;t get it? Check spam, then resend.
+            </p>
+          ) : null}
         </form>
 
         <div className="mt-7 text-sm text-neutral-700">
