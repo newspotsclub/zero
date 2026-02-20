@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { getStaticMapImageUrl } from "@/lib/staticMap";
 import { getSupabaseClient } from "@/lib/supabase";
@@ -69,6 +70,7 @@ function mapRowToSpot(row: SpotRow): Spot {
 }
 
 export default function Home() {
+  const router = useRouter();
   const supabaseConfigured = Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -486,7 +488,7 @@ export default function Home() {
                   href={spot.mapsLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group relative aspect-[4/5] w-full overflow-hidden border border-black/20 bg-white/50 transition hover:border-black"
+                  className="group relative aspect-[4/5] w-full overflow-hidden rounded-md border border-black/20 bg-white/50 transition hover:border-black"
                 >
                   {userId ? (
                     <div className="absolute inset-x-2 top-2 z-10 flex items-center justify-between">
@@ -550,9 +552,29 @@ export default function Home() {
                       </button>
                     </div>
                   ) : (
-                    <div className="absolute right-2 top-2 z-10 bg-white/90 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.13em] text-neutral-700">
-                      Login to save
-                    </div>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        router.push("/login");
+                      }}
+                      className="absolute right-2 top-2 z-10 bg-white/90 p-1.5 text-neutral-700"
+                      aria-label="Login to bookmark"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.75"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M6 4.5A1.5 1.5 0 0 1 7.5 3h9A1.5 1.5 0 0 1 18 4.5V21l-6-3.75L6 21V4.5z" />
+                      </svg>
+                    </button>
                   )}
 
                   <Image
