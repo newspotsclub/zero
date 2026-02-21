@@ -116,9 +116,16 @@ export default function AdminPage() {
     mapsApiKey ? "loading" : "idle",
   );
 
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(
-    supabaseConfigured ? null : "Supabase is not configured.",
+  const [toast, setToast] = useState<{
+    tone: "success" | "error";
+    text: string;
+  } | null>(
+    supabaseConfigured
+      ? null
+      : {
+          tone: "error",
+          text: "Supabase is not configured.",
+        },
   );
 
   const placesReady = mapsStatus === "ready";
@@ -187,6 +194,14 @@ export default function AdminPage() {
     };
   }, [placeSearch, placesReady]);
 
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(null), 1800);
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [toast]);
+
   const saveStatusHint = useMemo(() => {
     if (!mapsApiKey) return "Google Places key not configured.";
     if (mapsStatus === "ready") return "Google Places ready.";
@@ -197,12 +212,14 @@ export default function AdminPage() {
   const fetchPlaceDetails = (selectedPlaceId: string, description: string) => {
     const googlePlaces = window.google?.maps?.places;
     if (!googlePlaces) {
-      setError("Google Places is not loaded yet.");
+      setToast({
+        tone: "error",
+        text: "Google Places is not loaded yet.",
+      });
       return;
     }
 
-    setError(null);
-    setMessage(null);
+    setToast(null);
     setIsFetchingPlace(true);
 
     const service = new googlePlaces.PlacesService(document.createElement("div"));
@@ -215,7 +232,10 @@ export default function AdminPage() {
         setIsFetchingPlace(false);
 
         if (statusCode !== googlePlaces.PlacesServiceStatus.OK || !place) {
-          setError("Unable to fetch details for this place.");
+          setToast({
+            tone: "error",
+            text: "Unable to fetch details for this place.",
+          });
           return;
         }
 
@@ -244,7 +264,10 @@ export default function AdminPage() {
         if (nextLatLng) setLatLng(nextLatLng);
         if (!image && photos[0]?.url) setImage(photos[0].url);
 
-        setMessage("Place selected. Coordinates and details have been filled in.");
+        setToast({
+          tone: "success",
+          text: "Place selected. Coordinates and details have been filled in.",
+        });
       },
     );
   };
@@ -269,26 +292,36 @@ export default function AdminPage() {
     try {
       const dataUrl = await toDataUrl();
       setImage(dataUrl);
-      setError(null);
-      setMessage(`Image selected: ${file.name}`);
+      setToast({
+        tone: "success",
+        text: `Image selected: ${file.name}`,
+      });
     } catch {
-      setError("Unable to load selected image file.");
+      setToast({
+        tone: "error",
+        text: "Unable to load selected image file.",
+      });
     }
   };
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setError(null);
-    setMessage(null);
+    setToast(null);
 
     if (status !== "allowed" || !userId) {
-      setError("You are not allowed to perform this action.");
+      setToast({
+        tone: "error",
+        text: "You are not allowed to perform this action.",
+      });
       return;
     }
 
     const supabase = getSupabaseClient();
     if (!supabase) {
-      setError("Supabase is not configured.");
+      setToast({
+        tone: "error",
+        text: "Supabase is not configured.",
+      });
       return;
     }
 
@@ -307,7 +340,10 @@ export default function AdminPage() {
     setIsSaving(false);
 
     if (insertError) {
-      setError(insertError.message);
+      setToast({
+        tone: "error",
+        text: insertError.message,
+      });
       return;
     }
 
@@ -320,7 +356,10 @@ export default function AdminPage() {
     setPlaceSearch("");
     setPlaceSuggestions([]);
     setPlacePhotos([]);
-    setMessage("Spot added successfully.");
+    setToast({
+      tone: "success",
+      text: "Spot added successfully.",
+    });
   };
 
   if (status === "loading") {
@@ -518,9 +557,6 @@ export default function AdminPage() {
           </div>
         ) : null}
 
-        {error ? <p className="text-sm text-red-700">{error}</p> : null}
-        {message ? <p className="text-sm text-green-700">{message}</p> : null}
-
         <button
           type="submit"
           disabled={isSaving}
@@ -529,6 +565,20 @@ export default function AdminPage() {
           {isSaving ? "Saving..." : "Add spot"}
         </button>
       </form>
+
+      {toast ? (
+        <div className="fixed bottom-4 right-4 z-50">
+          <div
+            className={`rounded-sm border px-3 py-2 text-xs shadow-sm ${
+              toast.tone === "success"
+                ? "border-black/20 bg-white/90 text-neutral-800"
+                : "border-red-700/30 bg-red-50/95 text-red-700"
+            }`}
+          >
+            {toast.text}
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
