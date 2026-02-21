@@ -794,7 +794,7 @@ export default function Home() {
                             void toggleSpotInList(
                               spot.id,
                               publicList,
-                              publicList?.title ?? "Favourites",
+                              publicList?.title ?? "Favorites",
                               isInPublicList,
                             );
                           }}
@@ -821,7 +821,7 @@ export default function Home() {
                             ) : (
                               <span className="h-3.5 w-3.5 shrink-0" aria-hidden />
                             )}
-                            <span>{publicList?.title ?? "Favourites"}</span>
+                            <span>{publicList?.title ?? "Favorites"}</span>
                           </span>
                         </button>
                         <button
