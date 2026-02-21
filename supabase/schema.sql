@@ -609,10 +609,30 @@ begin
       display_name = coalesce(public.profiles.display_name, excluded.display_name);
 
   insert into public.profile_lists (user_id, title, visibility, slug)
-  values
-    (new.id, format('%s''s Favorites', computed_display_name), 'public', 'favorites'),
-    (new.id, format('%s''s Visited', computed_display_name), 'private', 'visited')
-  on conflict (user_id, visibility) do nothing;
+  select
+    new.id,
+    'Favorites',
+    'public',
+    'favorites'
+  where not exists (
+    select 1
+    from public.profile_lists pl
+    where pl.user_id = new.id
+      and pl.visibility = 'public'
+  );
+
+  insert into public.profile_lists (user_id, title, visibility, slug)
+  select
+    new.id,
+    'Visited',
+    'private',
+    'visited'
+  where not exists (
+    select 1
+    from public.profile_lists pl
+    where pl.user_id = new.id
+      and pl.visibility = 'private'
+  );
 
   return new;
 end;
@@ -630,20 +650,30 @@ where display_name is null
 insert into public.profile_lists (user_id, title, visibility, slug)
 select
   p.user_id,
-  format('%s''s Favorites', coalesce(nullif(p.display_name, ''), 'NewSpots User')),
+  'Favorites',
   'public',
   'favorites'
 from public.profiles p
-on conflict (user_id, visibility) do nothing;
+where not exists (
+  select 1
+  from public.profile_lists pl
+  where pl.user_id = p.user_id
+    and pl.visibility = 'public'
+);
 
 insert into public.profile_lists (user_id, title, visibility, slug)
 select
   p.user_id,
-  format('%s''s Visited', coalesce(nullif(p.display_name, ''), 'NewSpots User')),
+  'Visited',
   'private',
   'visited'
 from public.profiles p
-on conflict (user_id, visibility) do nothing;
+where not exists (
+  select 1
+  from public.profile_lists pl
+  where pl.user_id = p.user_id
+    and pl.visibility = 'private'
+);
 
 insert into public.profile_list_items (list_id, spot_id)
 select
@@ -680,3 +710,132 @@ join public.spots s
   )
 where uss.is_visited
 on conflict (list_id, spot_id) do nothing;
+
+-- User deletion hardening: enforce list cascades + cleanup trigger.
+delete from public.profile_list_items pli
+where not exists (
+  select 1 from public.profile_lists pl where pl.id = pli.list_id
+);
+
+delete from public.profile_lists pl
+where not exists (
+  select 1 from auth.users u where u.id = pl.user_id
+);
+
+delete from public.profile_lists pl
+where not exists (
+  select 1 from public.profiles p where p.user_id = pl.user_id
+);
+
+do $$
+declare
+  fk record;
+begin
+  for fk in
+    select c.conname
+    from pg_constraint c
+    join pg_attribute a
+      on a.attrelid = c.conrelid
+     and a.attnum = any(c.conkey)
+    where c.conrelid = 'public.profile_lists'::regclass
+      and c.contype = 'f'
+      and c.confrelid = 'auth.users'::regclass
+      and a.attname = 'user_id'
+  loop
+    execute format(
+      'alter table public.profile_lists drop constraint %I',
+      fk.conname
+    );
+  end loop;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'profile_lists_user_id_auth_fkey'
+      and conrelid = 'public.profile_lists'::regclass
+  ) then
+    alter table public.profile_lists
+      add constraint profile_lists_user_id_auth_fkey
+      foreign key (user_id)
+      references auth.users(id)
+      on delete cascade;
+  end if;
+end $$;
+
+do $$
+declare
+  fk record;
+begin
+  for fk in
+    select c.conname
+    from pg_constraint c
+    join pg_attribute a
+      on a.attrelid = c.conrelid
+     and a.attnum = any(c.conkey)
+    where c.conrelid = 'public.profile_lists'::regclass
+      and c.contype = 'f'
+      and c.confrelid = 'public.profiles'::regclass
+      and a.attname = 'user_id'
+  loop
+    execute format(
+      'alter table public.profile_lists drop constraint %I',
+      fk.conname
+    );
+  end loop;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'profile_lists_user_id_profiles_fkey'
+      and conrelid = 'public.profile_lists'::regclass
+  ) then
+    alter table public.profile_lists
+      add constraint profile_lists_user_id_profiles_fkey
+      foreign key (user_id)
+      references public.profiles(user_id)
+      on delete cascade;
+  end if;
+end $$;
+
+create or replace function public.handle_deleted_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from public.profile_lists where user_id = old.id;
+  delete from public.user_spot_status where user_id = old.id;
+  delete from public.profiles where user_id = old.id;
+  return old;
+end;
+$$;
+
+drop trigger if exists on_auth_user_deleted on auth.users;
+
+create trigger on_auth_user_deleted
+after delete on auth.users
+for each row execute procedure public.handle_deleted_user();
+
+-- Normalize system list titles and keep plain defaults.
+update public.profile_lists
+set title = 'Favorites'
+where visibility = 'public'
+  and (
+    title ~* E'.+[''’]s[[:space:]]+favorites$'
+    or lower(btrim(title)) in ('favorites', 'favourites')
+  );
+
+update public.profile_lists
+set title = 'Visited'
+where visibility = 'private'
+  and (
+    title ~* E'.+[''’]s[[:space:]]+visited$'
+    or lower(btrim(title)) = 'visited'
+  );
