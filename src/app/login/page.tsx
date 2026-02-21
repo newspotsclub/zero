@@ -8,8 +8,10 @@ import { getSupabaseClient } from "@/lib/supabase";
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{
+    tone: "success" | "error";
+    text: string;
+  } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [lastEmailSentTo, setLastEmailSentTo] = useState<string | null>(null);
@@ -20,7 +22,10 @@ export default function LoginPage() {
   useEffect(() => {
     const supabase = getSupabaseClient();
     if (!supabase) {
-      setError("Supabase is not configured. Add env vars to continue.");
+      setToast({
+        tone: "error",
+        text: "Supabase is not configured. Add env vars to continue.",
+      });
       setIsCheckingSession(false);
       return;
     }
@@ -44,13 +49,23 @@ export default function LoginPage() {
     };
   }, [router]);
 
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(null), 1800);
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [toast]);
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setError(null);
-    setMessage(null);
+    setToast(null);
 
     if (!canSubmit) {
-      setError("Please enter your email.");
+      setToast({
+        tone: "error",
+        text: "Please enter your email.",
+      });
       return;
     }
 
@@ -59,7 +74,10 @@ export default function LoginPage() {
     try {
       const supabase = getSupabaseClient();
       if (!supabase) {
-        setError("Supabase is not configured. Add env vars to continue.");
+        setToast({
+          tone: "error",
+          text: "Supabase is not configured. Add env vars to continue.",
+        });
         return;
       }
 
@@ -77,13 +95,15 @@ export default function LoginPage() {
       if (signInError) throw signInError;
 
       setLastEmailSentTo(cleanedEmail);
-      setMessage(
-        `Magic link sent to ${cleanedEmail}. Open the email and tap the link to log in.`,
-      );
+      setToast({
+        tone: "success",
+        text: `Magic link sent to ${cleanedEmail}. Open the email and tap the link to log in.`,
+      });
     } catch (caughtError) {
-      setError(
-        caughtError instanceof Error ? caughtError.message : "Unable to continue.",
-      );
+      setToast({
+        tone: "error",
+        text: caughtError instanceof Error ? caughtError.message : "Unable to continue.",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -127,18 +147,6 @@ export default function LoginPage() {
             />
           </label>
 
-          {error ? (
-            <p className="border border-red-700/35 bg-red-50/70 px-3 py-2 text-sm text-red-700">
-              {error}
-            </p>
-          ) : null}
-
-          {message ? (
-            <p className="border border-emerald-700/35 bg-emerald-50/70 px-3 py-2 text-sm text-emerald-800">
-              {message}
-            </p>
-          ) : null}
-
           <button
             type="submit"
             disabled={isSubmitting || isCheckingSession || !canSubmit}
@@ -163,6 +171,20 @@ export default function LoginPage() {
           </Link>
         </div>
       </div>
+
+      {toast ? (
+        <div className="fixed bottom-4 right-4 z-50">
+          <div
+            className={`rounded-sm border px-3 py-2 text-xs shadow-sm ${
+              toast.tone === "success"
+                ? "border-black/20 bg-white/90 text-neutral-800"
+                : "border-red-700/30 bg-red-50/95 text-red-700"
+            }`}
+          >
+            {toast.text}
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

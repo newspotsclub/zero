@@ -265,3 +265,577 @@ begin
     );
   end if;
 end $$;
+
+-- Profile identity + public/private profile lists.
+alter table public.profiles
+add column if not exists display_name text;
+
+alter table public.profiles
+add column if not exists username text;
+
+alter table public.profiles
+add column if not exists avatar_url text;
+
+alter table public.profiles
+add column if not exists updated_at timestamptz not null default now();
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'profiles_username_format_check'
+  ) then
+    alter table public.profiles
+    add constraint profiles_username_format_check
+    check (
+      username is null or (
+        username = lower(username)
+        and char_length(username) between 3 and 30
+        and username ~ '^[a-z0-9._]+$'
+        and username !~ '^[._]'
+        and username !~ '[._]$'
+        and username !~ '[._]{2,}'
+      )
+    );
+  end if;
+end $$;
+
+create unique index if not exists profiles_username_unique
+on public.profiles (lower(username));
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'profiles'
+      and policyname = 'Anyone can read public profiles'
+  ) then
+    create policy "Anyone can read public profiles"
+    on public.profiles
+    for select
+    using (
+      nullif(btrim(username), '') is not null
+    );
+  end if;
+end $$;
+
+create table if not exists public.profile_lists (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  title text not null,
+  visibility text not null check (visibility in ('public', 'private')),
+  slug text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+do $$
+declare
+  visibility_index_oid oid;
+  index_is_constraint boolean;
+  constraint_is_deferrable boolean;
+begin
+  select c.oid
+  into visibility_index_oid
+  from pg_class c
+  join pg_namespace n
+    on n.oid = c.relnamespace
+  where n.nspname = 'public'
+    and c.relname = 'profile_lists_user_visibility_unique'
+    and c.relkind = 'i'
+  limit 1;
+
+  if visibility_index_oid is not null then
+    select exists (
+      select 1
+      from pg_constraint
+      where conindid = visibility_index_oid
+    )
+    into index_is_constraint;
+
+    if not index_is_constraint then
+      execute 'drop index public.profile_lists_user_visibility_unique';
+    end if;
+  end if;
+
+  select condeferrable
+  into constraint_is_deferrable
+  from pg_constraint
+  where conrelid = 'public.profile_lists'::regclass
+    and conname = 'profile_lists_user_visibility_unique'
+  limit 1;
+
+  if constraint_is_deferrable = false then
+    alter table public.profile_lists
+    drop constraint profile_lists_user_visibility_unique;
+    constraint_is_deferrable := null;
+  end if;
+
+  if constraint_is_deferrable is null then
+    alter table public.profile_lists
+    add constraint profile_lists_user_visibility_unique
+    unique (user_id, visibility)
+    deferrable initially immediate;
+  end if;
+end $$;
+
+create unique index if not exists profile_lists_user_slug_unique
+on public.profile_lists (user_id, slug);
+
+alter table public.profile_lists enable row level security;
+
+drop trigger if exists set_profiles_updated_at on public.profiles;
+
+create trigger set_profiles_updated_at
+before update on public.profiles
+for each row execute procedure public.set_updated_at();
+
+drop trigger if exists set_profile_lists_updated_at on public.profile_lists;
+
+create trigger set_profile_lists_updated_at
+before update on public.profile_lists
+for each row execute procedure public.set_updated_at();
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'profile_lists'
+      and policyname = 'Users can read own or public profile lists'
+  ) then
+    create policy "Users can read own or public profile lists"
+    on public.profile_lists
+    for select
+    using (visibility = 'public' or auth.uid() = user_id);
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'profile_lists'
+      and policyname = 'Users can insert own profile lists'
+  ) then
+    create policy "Users can insert own profile lists"
+    on public.profile_lists
+    for insert
+    with check (auth.uid() = user_id);
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'profile_lists'
+      and policyname = 'Users can update own profile lists'
+  ) then
+    create policy "Users can update own profile lists"
+    on public.profile_lists
+    for update
+    using (auth.uid() = user_id)
+    with check (auth.uid() = user_id);
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'profile_lists'
+      and policyname = 'Users can delete own profile lists'
+  ) then
+    create policy "Users can delete own profile lists"
+    on public.profile_lists
+    for delete
+    using (auth.uid() = user_id);
+  end if;
+end $$;
+
+create table if not exists public.profile_list_items (
+  id bigint generated by default as identity primary key,
+  list_id uuid not null references public.profile_lists (id) on delete cascade,
+  spot_id bigint not null references public.spots (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  constraint profile_list_items_unique unique (list_id, spot_id)
+);
+
+alter table public.profile_list_items enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'profile_list_items'
+      and policyname = 'Users can read visible profile list items'
+  ) then
+    create policy "Users can read visible profile list items"
+    on public.profile_list_items
+    for select
+    using (
+      exists (
+        select 1
+        from public.profile_lists pl
+        where pl.id = profile_list_items.list_id
+          and (pl.visibility = 'public' or pl.user_id = auth.uid())
+      )
+    );
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'profile_list_items'
+      and policyname = 'Users can insert own profile list items'
+  ) then
+    create policy "Users can insert own profile list items"
+    on public.profile_list_items
+    for insert
+    with check (
+      exists (
+        select 1
+        from public.profile_lists pl
+        where pl.id = profile_list_items.list_id
+          and pl.user_id = auth.uid()
+      )
+    );
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'profile_list_items'
+      and policyname = 'Users can delete own profile list items'
+  ) then
+    create policy "Users can delete own profile list items"
+    on public.profile_list_items
+    for delete
+    using (
+      exists (
+        select 1
+        from public.profile_lists pl
+        where pl.id = profile_list_items.list_id
+          and pl.user_id = auth.uid()
+      )
+    );
+  end if;
+end $$;
+
+create or replace function public.toggle_profile_list_visibility(target_list_id uuid)
+returns void
+language plpgsql
+set search_path = public
+as $$
+declare
+  current_visibility text;
+  opposite_visibility text;
+  sibling_list_id uuid;
+begin
+  select visibility
+  into current_visibility
+  from public.profile_lists
+  where id = target_list_id
+    and user_id = auth.uid()
+  for update;
+
+  if current_visibility is null then
+    raise exception 'List not found or not owned by current user';
+  end if;
+
+  opposite_visibility := case
+    when current_visibility = 'public' then 'private'
+    else 'public'
+  end;
+
+  set constraints profile_lists_user_visibility_unique deferred;
+
+  select id
+  into sibling_list_id
+  from public.profile_lists
+  where user_id = auth.uid()
+    and visibility = opposite_visibility
+    and id <> target_list_id
+  limit 1
+  for update;
+
+  if sibling_list_id is null then
+    update public.profile_lists
+    set visibility = opposite_visibility
+    where id = target_list_id;
+  else
+    update public.profile_lists
+    set visibility = case
+      when id = target_list_id then opposite_visibility
+      when id = sibling_list_id then current_visibility
+      else visibility
+    end
+    where id in (target_list_id, sibling_list_id);
+  end if;
+end;
+$$;
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  computed_display_name text;
+begin
+  computed_display_name := coalesce(
+    nullif(initcap(regexp_replace(split_part(coalesce(new.email, ''), '@', 1), '[._-]+', ' ', 'g')), ''),
+    'NewSpots User'
+  );
+
+  insert into public.profiles (user_id, email, display_name)
+  values (new.id, new.email, computed_display_name)
+  on conflict (user_id) do update
+  set email = excluded.email,
+      display_name = coalesce(public.profiles.display_name, excluded.display_name);
+
+  insert into public.profile_lists (user_id, title, visibility, slug)
+  select
+    new.id,
+    'Favorites',
+    'public',
+    'favorites'
+  where not exists (
+    select 1
+    from public.profile_lists pl
+    where pl.user_id = new.id
+      and pl.visibility = 'public'
+  );
+
+  insert into public.profile_lists (user_id, title, visibility, slug)
+  select
+    new.id,
+    'Visited',
+    'private',
+    'visited'
+  where not exists (
+    select 1
+    from public.profile_lists pl
+    where pl.user_id = new.id
+      and pl.visibility = 'private'
+  );
+
+  return new;
+end;
+$$;
+
+update public.profiles
+set display_name = coalesce(
+  nullif(display_name, ''),
+  nullif(initcap(regexp_replace(split_part(coalesce(email, ''), '@', 1), '[._-]+', ' ', 'g')), ''),
+  'NewSpots User'
+)
+where display_name is null
+   or btrim(display_name) = '';
+
+insert into public.profile_lists (user_id, title, visibility, slug)
+select
+  p.user_id,
+  'Favorites',
+  'public',
+  'favorites'
+from public.profiles p
+where not exists (
+  select 1
+  from public.profile_lists pl
+  where pl.user_id = p.user_id
+    and pl.visibility = 'public'
+);
+
+insert into public.profile_lists (user_id, title, visibility, slug)
+select
+  p.user_id,
+  'Visited',
+  'private',
+  'visited'
+from public.profiles p
+where not exists (
+  select 1
+  from public.profile_lists pl
+  where pl.user_id = p.user_id
+    and pl.visibility = 'private'
+);
+
+insert into public.profile_list_items (list_id, spot_id)
+select
+  pl.id,
+  s.id
+from public.user_spot_status uss
+join public.profile_lists pl
+  on pl.user_id = uss.user_id
+ and pl.visibility = 'public'
+join public.spots s
+  on uss.spot_key = regexp_replace(
+    regexp_replace(lower(s.name || '-' || s.city), '[^a-z0-9]+', '-', 'g'),
+    '(^-|-$)',
+    '',
+    'g'
+  )
+where uss.is_favorite
+on conflict (list_id, spot_id) do nothing;
+
+insert into public.profile_list_items (list_id, spot_id)
+select
+  pl.id,
+  s.id
+from public.user_spot_status uss
+join public.profile_lists pl
+  on pl.user_id = uss.user_id
+ and pl.visibility = 'private'
+join public.spots s
+  on uss.spot_key = regexp_replace(
+    regexp_replace(lower(s.name || '-' || s.city), '[^a-z0-9]+', '-', 'g'),
+    '(^-|-$)',
+    '',
+    'g'
+  )
+where uss.is_visited
+on conflict (list_id, spot_id) do nothing;
+
+-- User deletion hardening: enforce list cascades + cleanup trigger.
+delete from public.profile_list_items pli
+where not exists (
+  select 1 from public.profile_lists pl where pl.id = pli.list_id
+);
+
+delete from public.profile_lists pl
+where not exists (
+  select 1 from auth.users u where u.id = pl.user_id
+);
+
+delete from public.profile_lists pl
+where not exists (
+  select 1 from public.profiles p where p.user_id = pl.user_id
+);
+
+do $$
+declare
+  fk record;
+begin
+  for fk in
+    select c.conname
+    from pg_constraint c
+    join pg_attribute a
+      on a.attrelid = c.conrelid
+     and a.attnum = any(c.conkey)
+    where c.conrelid = 'public.profile_lists'::regclass
+      and c.contype = 'f'
+      and c.confrelid = 'auth.users'::regclass
+      and a.attname = 'user_id'
+  loop
+    execute format(
+      'alter table public.profile_lists drop constraint %I',
+      fk.conname
+    );
+  end loop;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'profile_lists_user_id_auth_fkey'
+      and conrelid = 'public.profile_lists'::regclass
+  ) then
+    alter table public.profile_lists
+      add constraint profile_lists_user_id_auth_fkey
+      foreign key (user_id)
+      references auth.users(id)
+      on delete cascade;
+  end if;
+end $$;
+
+do $$
+declare
+  fk record;
+begin
+  for fk in
+    select c.conname
+    from pg_constraint c
+    join pg_attribute a
+      on a.attrelid = c.conrelid
+     and a.attnum = any(c.conkey)
+    where c.conrelid = 'public.profile_lists'::regclass
+      and c.contype = 'f'
+      and c.confrelid = 'public.profiles'::regclass
+      and a.attname = 'user_id'
+  loop
+    execute format(
+      'alter table public.profile_lists drop constraint %I',
+      fk.conname
+    );
+  end loop;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'profile_lists_user_id_profiles_fkey'
+      and conrelid = 'public.profile_lists'::regclass
+  ) then
+    alter table public.profile_lists
+      add constraint profile_lists_user_id_profiles_fkey
+      foreign key (user_id)
+      references public.profiles(user_id)
+      on delete cascade;
+  end if;
+end $$;
+
+create or replace function public.handle_deleted_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from public.profile_lists where user_id = old.id;
+  delete from public.user_spot_status where user_id = old.id;
+  delete from public.profiles where user_id = old.id;
+  return old;
+end;
+$$;
+
+drop trigger if exists on_auth_user_deleted on auth.users;
+
+create trigger on_auth_user_deleted
+after delete on auth.users
+for each row execute procedure public.handle_deleted_user();
+
+-- Normalize system list titles and keep plain defaults.
+update public.profile_lists
+set title = 'Favorites'
+where visibility = 'public'
+  and (
+    title ~* E'.+[''’]s[[:space:]]+favorites$'
+    or lower(btrim(title)) in ('favorites', 'favourites')
+  );
+
+update public.profile_lists
+set title = 'Visited'
+where visibility = 'private'
+  and (
+    title ~* E'.+[''’]s[[:space:]]+visited$'
+    or lower(btrim(title)) = 'visited'
+  );

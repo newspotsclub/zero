@@ -69,11 +69,16 @@ async function main() {
     await ensureTable("profiles");
     await ensureTable("user_spot_status");
     await ensureTable("spots");
+    await ensureTable("profile_lists");
+    await ensureTable("profile_list_items");
 
     await ensureRls("profiles");
     await ensureRls("user_spot_status");
     await ensureRls("spots");
+    await ensureRls("profile_lists");
+    await ensureRls("profile_list_items");
 
+    await ensurePolicy("profiles", "Anyone can read public profiles");
     await ensurePolicy("user_spot_status", "Users can read own statuses");
     await ensurePolicy("user_spot_status", "Users can insert own statuses");
     await ensurePolicy("user_spot_status", "Users can update own statuses");
@@ -82,7 +87,31 @@ async function main() {
     await ensurePolicy("spots", "Admins can insert spots");
     await ensurePolicy("spots", "Admins can update spots");
     await ensurePolicy("spots", "Admins can delete spots");
+    await ensurePolicy(
+      "profile_lists",
+      "Users can read own or public profile lists",
+    );
+    await ensurePolicy("profile_lists", "Users can insert own profile lists");
+    await ensurePolicy("profile_lists", "Users can update own profile lists");
+    await ensurePolicy("profile_lists", "Users can delete own profile lists");
+    await ensurePolicy(
+      "profile_list_items",
+      "Users can read visible profile list items",
+    );
+    await ensurePolicy(
+      "profile_list_items",
+      "Users can insert own profile list items",
+    );
+    await ensurePolicy(
+      "profile_list_items",
+      "Users can delete own profile list items",
+    );
+    await ensureColumn("profiles", "display_name");
+    await ensureColumn("profiles", "username");
+    await ensureColumn("profiles", "avatar_url");
+    await ensureColumn("profiles", "updated_at");
     await ensureColumn("spots", "place_id");
+    await ensureColumn("profile_lists", "slug");
 
     console.log("DB verify passed: tables, RLS, and policies are present.");
   } finally {
