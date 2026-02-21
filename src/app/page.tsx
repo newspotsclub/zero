@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { type MouseEvent, useEffect, useMemo, useState } from "react";
 import { getStaticMapImageUrl } from "@/lib/staticMap";
 import { getSupabaseClient } from "@/lib/supabase";
 
@@ -93,6 +93,7 @@ export default function Home() {
   const [statuses, setStatuses] = useState<Record<string, SpotStatus>>({});
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [pendingRedirectSpot, setPendingRedirectSpot] = useState<Spot | null>(null);
 
   const hasFavoriteSpots = useMemo(
     () => Object.values(statuses).some((status) => status.favorite),
@@ -125,6 +126,8 @@ export default function Home() {
   ];
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const startIndex = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const endIndex = totalCount === 0 ? 0 : startIndex + spots.length - 1;
 
   useEffect(() => {
     const supabase = getSupabaseClient();
@@ -315,6 +318,21 @@ export default function Home() {
     };
   }, [activeFilter, page, statuses]);
 
+  const handleSpotSelect = (event: MouseEvent<HTMLAnchorElement>, spot: Spot) => {
+    event.preventDefault();
+    setPendingRedirectSpot(spot);
+  };
+
+  const cancelSpotRedirect = () => {
+    setPendingRedirectSpot(null);
+  };
+
+  const confirmSpotRedirect = () => {
+    if (!pendingRedirectSpot) return;
+    window.open(pendingRedirectSpot.mapsLink, "_blank", "noopener,noreferrer");
+    setPendingRedirectSpot(null);
+  };
+
   const toggleSpotStatus = async (
     spot: Spot,
     field: keyof SpotStatus,
@@ -488,6 +506,7 @@ export default function Home() {
                   href={spot.mapsLink}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={(event) => handleSpotSelect(event, spot)}
                   className="group relative aspect-[4/5] w-full overflow-hidden rounded-md border border-black/20 bg-white/50 transition hover:border-black"
                 >
                   {userId ? (
@@ -606,8 +625,7 @@ export default function Home() {
           {!isSpotsLoading && totalCount > PAGE_SIZE ? (
             <div className="mt-7 grid grid-cols-2 items-center gap-2 text-xs text-neutral-600 md:grid-cols-4">
               <p className="md:col-span-2">
-                Showing {(page - 1) * PAGE_SIZE + 1}-
-                {Math.min(page * PAGE_SIZE, totalCount)} of {totalCount}
+                Showing {startIndex}-{endIndex} of {totalCount}
               </p>
               <div className="flex items-center gap-2 md:justify-end">
                 <button
@@ -642,6 +660,45 @@ export default function Home() {
           </footer>
         </div>
       </main>
+
+      {pendingRedirectSpot ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="maps-redirect-title"
+          aria-describedby="maps-redirect-description"
+        >
+          <div className="w-full max-w-sm border border-black/25 bg-[#f5f5f2] p-5 shadow-[0_20px_50px_rgba(0,0,0,0.25)]">
+            <p
+              id="maps-redirect-title"
+              className="font-mono text-xs uppercase tracking-[0.18em] text-neutral-900"
+            >
+              Open Google Maps?
+            </p>
+            <p id="maps-redirect-description" className="mt-3 text-sm text-neutral-700">
+              Redirect to <span className="font-medium">{pendingRedirectSpot.name}</span> in
+              a new tab?
+            </p>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={cancelSpotRedirect}
+                className="border border-black/20 bg-white/70 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-700 hover:border-black hover:text-black"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmSpotRedirect}
+                className="border border-black bg-black px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-white hover:bg-neutral-800"
+              >
+                Open
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
