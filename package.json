@@ -12,6 +12,7 @@
     "supabase:stop": "npx supabase stop",
     "db:reset:local": "npx supabase db reset",
     "db:verify": "node ./scripts/verify-db.mjs",
+    "db:backfill:profiles": "node ./scripts/backfill-profile-identities.mjs",
     "db:check:staging": "bash scripts/check-staging-db.sh",
     "db:push:staging": "bash scripts/supabase-promote.sh staging",
     "db:push:production": "bash scripts/supabase-promote.sh production",
