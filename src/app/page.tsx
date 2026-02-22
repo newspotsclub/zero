@@ -790,17 +790,13 @@ export default function Home() {
                     className="absolute inset-0 z-10 cursor-pointer"
                     aria-label={`Open details for ${spot.name}`}
                   />
-                  <div className="absolute left-2 top-2 z-20">
-                    <span
-                      className={`inline-flex items-center border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.16em] ${
-                        spot.verified
-                          ? "border-emerald-700/40 bg-emerald-50/90 text-emerald-800"
-                          : "border-black/20 bg-white/90 text-neutral-700"
-                      }`}
-                    >
-                      {spot.verified ? "On Radar" : "Yet to Try"}
-                    </span>
-                  </div>
+                  {!spot.verified ? (
+                    <div className="absolute left-2 top-2 z-20">
+                      <span className="inline-flex items-center border border-black/20 bg-white/90 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.16em] text-neutral-700">
+                        Yet to Try
+                      </span>
+                    </div>
+                  ) : null}
                   <div className="absolute right-2 top-2 z-20">
                     <button
                       type="button"
@@ -1025,17 +1021,13 @@ export default function Home() {
                     sizes="(max-width: 768px) 100vw, 50vw"
                     priority
                   />
-                  <div className="absolute left-3 top-3">
-                    <span
-                      className={`inline-flex items-center border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] ${
-                        selectedSpot.verified
-                          ? "border-emerald-700/35 bg-emerald-50/90 text-emerald-800"
-                          : "border-black/20 bg-white/90 text-neutral-700"
-                      }`}
-                    >
-                      {selectedSpot.verified ? "On Radar" : "Yet to Try"}
-                    </span>
-                  </div>
+                  {!selectedSpot.verified ? (
+                    <div className="absolute left-3 top-3">
+                      <span className="inline-flex items-center border border-black/20 bg-white/90 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-neutral-700">
+                        Yet to Try
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="flex flex-col p-4 md:p-5">
