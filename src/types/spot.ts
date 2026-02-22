@@ -8,6 +8,8 @@ export type Spot = {
   image?: string;
   name: string;
   latLng?: string;
+  verified?: boolean;
+  heroDish?: string;
   locations: Location[];
 };
 

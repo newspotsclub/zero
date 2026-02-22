@@ -14,6 +14,8 @@ type Spot = {
   city: string;
   mapsLink: string;
   latLng?: string;
+  verified: boolean;
+  heroDish?: string;
 };
 
 type SpotRow = {
@@ -23,6 +25,8 @@ type SpotRow = {
   maps_link: string;
   lat_lng: string | null;
   image: string | null;
+  verified: boolean | null;
+  hero_dish: string | null;
 };
 
 type ProfileList = {
@@ -110,6 +114,8 @@ function mapRowToSpot(row: SpotRow): Spot {
     mapsLink: row.maps_link,
     latLng: row.lat_lng ?? undefined,
     image: row.image ?? undefined,
+    verified: row.verified ?? false,
+    heroDish: row.hero_dish?.trim() || undefined,
   };
 }
 
@@ -125,6 +131,7 @@ export default function Home() {
   const [cities, setCities] = useState<string[]>(["All"]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
+  const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
   const [isSpotsLoading, setIsSpotsLoading] = useState(supabaseConfigured);
   const [spotsError, setSpotsError] = useState<string | null>(
     supabaseConfigured ? null : "Supabase is not configured yet.",
@@ -332,7 +339,9 @@ export default function Home() {
 
       let query = supabase
         .from("spots")
-        .select("id, name, city, maps_link, lat_lng, image", { count: "exact" })
+        .select("id, name, city, maps_link, lat_lng, image, verified, hero_dish", {
+          count: "exact",
+        })
         .order("created_at", { ascending: false })
         .range(from, to);
 
@@ -371,6 +380,19 @@ export default function Home() {
       window.clearTimeout(timeout);
     };
   }, [homeToast]);
+
+  useEffect(() => {
+    if (!selectedSpot) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedSpot(null);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [selectedSpot]);
 
   useEffect(() => {
     if (!spotsError) return;
@@ -420,6 +442,7 @@ export default function Home() {
     setSelectedCity(value);
     setPage(1);
     setOpenAddMenuSpotId(null);
+    setSelectedSpot(null);
   };
 
   const publicList = profileLists.find((list) => list.visibility === "public");
@@ -754,13 +777,26 @@ export default function Home() {
                 );
 
                 return (
-                  <a
+                  <div
                     key={spot.id}
-                    href={spot.mapsLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     className="group relative aspect-[4/5] w-full overflow-hidden rounded-md border border-black/20 bg-white/50 transition hover:border-black"
                   >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenAddMenuSpotId(null);
+                      setSelectedSpot(spot);
+                    }}
+                    className="absolute inset-0 z-10 cursor-pointer"
+                    aria-label={`Open details for ${spot.name}`}
+                  />
+                  {!spot.verified ? (
+                    <div className="absolute left-2 top-2 z-20">
+                      <span className="inline-flex items-center border border-black/20 bg-white/90 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.16em] text-neutral-700">
+                        Yet to Try
+                      </span>
+                    </div>
+                  ) : null}
                   <div className="absolute right-2 top-2 z-20">
                     <button
                       type="button"
@@ -895,8 +931,13 @@ export default function Home() {
                     <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-white/90">
                       {spot.city}
                     </p>
+                    {spot.heroDish ? (
+                      <p className="mt-1 truncate font-mono text-[10px] uppercase tracking-[0.1em] text-white/80">
+                        Hero dish: {spot.heroDish}
+                      </p>
+                    ) : null}
                   </div>
-                </a>
+                </div>
                 );
               })}
             </div>
@@ -915,7 +956,10 @@ export default function Home() {
               <div className="flex items-center gap-2 md:justify-end">
                 <button
                   type="button"
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  onClick={() => {
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                    setPage((current) => Math.max(1, current - 1));
+                  }}
                   disabled={page <= 1}
                   className="border border-black/20 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-700 disabled:opacity-40"
                 >
@@ -923,9 +967,10 @@ export default function Home() {
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    setPage((current) => Math.min(totalPages, current + 1))
-                  }
+                  onClick={() => {
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                    setPage((current) => Math.min(totalPages, current + 1));
+                  }}
                   disabled={page >= totalPages}
                   className="border border-black/20 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-700 disabled:opacity-40"
                 >
@@ -949,6 +994,91 @@ export default function Home() {
           </footer>
         </div>
       </main>
+
+      {selectedSpot ? (
+        <div
+          className="fixed inset-0 z-40 bg-black/45 p-4 md:p-6"
+          onClick={() => setSelectedSpot(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="spot-details-title"
+        >
+          <div className="mx-auto grid h-full w-full max-w-4xl place-items-center">
+            <div
+              className="w-full max-w-3xl overflow-hidden border border-black/20 bg-[#f7f6f1] shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="grid md:grid-cols-[1.05fr_0.95fr]">
+                <div className="relative overflow-hidden aspect-[4/3] border-b border-black/10 md:aspect-auto md:min-h-[420px] md:border-b-0 md:border-r">
+                  <div className="absolute inset-0 bg-neutral-200" aria-hidden />
+                  <Image
+                    key={selectedSpot.id}
+                    src={getSpotImageUrl(selectedSpot)}
+                    alt={selectedSpot.name}
+                    width={1200}
+                    height={900}
+                    className="relative z-0 block h-full w-full object-cover"
+                    sizes="(max-width: 768px) 100vw, 50vw"
+                    priority
+                  />
+                  {!selectedSpot.verified ? (
+                    <div className="absolute left-3 top-3">
+                      <span className="inline-flex items-center border border-black/20 bg-white/90 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-neutral-700">
+                        Yet to Try
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-col p-4 md:p-5">
+                  <div className="flex items-start gap-3">
+                    <div>
+                      <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-neutral-500">
+                        Place Details
+                      </p>
+                      <h2
+                        id="spot-details-title"
+                        className="mt-2 text-2xl font-medium tracking-tight text-neutral-900"
+                      >
+                        {selectedSpot.name}
+                      </h2>
+                      <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.14em] text-neutral-600">
+                        {selectedSpot.city}
+                      </p>
+                    </div>
+                  </div>
+
+                  {selectedSpot.heroDish ? (
+                    <div className="mt-5 space-y-3 border-y border-black/10 py-4">
+                      <div className="grid grid-cols-[96px_1fr] gap-3 text-sm">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-500">
+                          Hero Dish
+                        </p>
+                        <p className="text-neutral-800">{selectedSpot.heroDish}</p>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <a
+                      href={selectedSpot.mapsLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center border border-black bg-black px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-white transition hover:bg-neutral-900"
+                    >
+                      Navigate
+                    </a>
+                  </div>
+
+                  <p className="mt-3 text-xs text-neutral-500">
+                    Opens Google Maps in a new tab.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isOnboardingOpen && userId ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4">
