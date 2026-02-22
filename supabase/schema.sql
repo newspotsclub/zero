@@ -175,6 +175,8 @@ create table if not exists public.spots (
   place_id text,
   lat_lng text,
   image text,
+  hero_dish text,
+  verified boolean not null default false,
   created_by uuid references auth.users (id) on delete set null,
   created_at timestamptz not null default now()
 );

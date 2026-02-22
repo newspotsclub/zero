@@ -104,6 +104,8 @@ export default function AdminPage() {
   const [placeId, setPlaceId] = useState("");
   const [latLng, setLatLng] = useState("");
   const [image, setImage] = useState("");
+  const [heroDish, setHeroDish] = useState("");
+  const [verified, setVerified] = useState(false);
 
   const [placeSearch, setPlaceSearch] = useState("");
   const [placeSuggestions, setPlaceSuggestions] = useState<PlaceSuggestion[]>([]);
@@ -334,6 +336,8 @@ export default function AdminPage() {
       place_id: placeId || null,
       lat_lng: latLng || null,
       image: image || null,
+      hero_dish: heroDish.trim() || null,
+      verified,
       created_by: userId,
     });
 
@@ -353,6 +357,8 @@ export default function AdminPage() {
     setPlaceId("");
     setLatLng("");
     setImage("");
+    setHeroDish("");
+    setVerified(false);
     setPlaceSearch("");
     setPlaceSuggestions([]);
     setPlacePhotos([]);
@@ -502,6 +508,27 @@ export default function AdminPage() {
             placeholder="https://... or data:image/..."
             className="w-full rounded-lg border border-neutral-300 px-3 py-2"
           />
+        </label>
+
+        <label className="block text-sm">
+          <span className="mb-1 block">Hero dish (optional)</span>
+          <input
+            type="text"
+            value={heroDish}
+            onChange={(event) => setHeroDish(event.target.value)}
+            placeholder="Spicy vodka rigatoni"
+            className="w-full rounded-lg border border-neutral-300 px-3 py-2"
+          />
+        </label>
+
+        <label className="flex items-center gap-2 rounded-lg border border-neutral-300 px-3 py-2 text-sm">
+          <input
+            type="checkbox"
+            checked={verified}
+            onChange={(event) => setVerified(event.target.checked)}
+            className="h-4 w-4"
+          />
+          <span>Mark as verified</span>
         </label>
 
         <label className="block text-sm">
