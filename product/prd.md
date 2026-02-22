@@ -1,5 +1,7 @@
 Below are the tasks that need completing:
 
+0. Add a local JSON  for places. To build and test features.
+
 1. Differentation between admins, curators and normal users
 
 2. The separate dashboard for admins to update normal users to cutrators 

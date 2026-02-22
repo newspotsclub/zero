@@ -15,6 +15,51 @@ Want to add a place? The footer links to **hello@newspots.club**.
 
 This is a [Next.js](https://nextjs.org) project with Supabase auth and user-specific place tracking.
 
+## Project structure
+
+The app is organized around shared types, lib utilities, hooks, and components. The home page composes these instead of holding all logic inline.
+
+### Types (`src/types/`)
+
+- **home.ts** — `HomeSpot` (spot as used on the home page from Supabase), `SpotRow` (DB row shape for mapping).
+- **profile.ts** — `Profile`, `ProfileList`, `ProfileListItem`, `ListVisibility`.
+- **spot.ts** — `Spot`, `Location`, `SpotEntry` (for the locations/areas-based flow where used).
+
+### Lib (`src/lib/`)
+
+- **constants.ts** — `PAGE_SIZE`, `MAX_PROFILE_PHOTO_BYTES`, `PROFILE_SELECT`, `PROFILE_SELECT_LEGACY`.
+- **geo.ts** — `parseLatLng(string)`.
+- **home-spots.ts** — `getHomeSpotImageUrl(spot)`, `mapRowToSpot(row)` for the home grid.
+- **profile-helpers.ts** — `getInitials`, `toDefaultDisplayName`, `isAvatarColumnMissing`.
+- **spots.ts** — `getSpotImageUrl(latLng?, image?)`, `flattenSpotEntries`, `getAreasFromEntries`, `filterEntriesByArea` (for locations-based spots).
+- **staticMap.ts** — `getStaticMapImageUrl(lat, lng)` (Google Static Maps).
+- **supabase.ts** — `getSupabaseClient()`.
+
+### Hooks (`src/hooks/`)
+
+- **useAuthSession** — `userId`, `userEmail`, `sessionLoading`, `signOut`.
+- **useSpots(selectedCity, page)** — `spots`, `cities`, `totalCount`, `totalPages`, `isSpotsLoading`, `spotsError`, `setSpotsError`.
+- **useProfileLists(userId)** — `profileLists`, `listSpotIdsByList`, `setListSpotIdsByList`; exports `ProfileListSummary`.
+- **useHomeProfile(userId, userEmail)** — profile fetch, `userRole`, onboarding state and setters, `saveOnboarding`, `getInitials`.
+
+### Components (`src/components/`)
+
+- **Header** — Logo, tagline, session state, Profile / Admin / Login / Sign out links.
+- **CityFilter** — City pill buttons.
+- **HomeSpotCard** — Spot card with image, overlay, and “add to list” menu (Favorites / Visited).
+- **SpotDetailModal** — Full spot details, hero dish, Navigate link.
+- **OnboardingModal** — Display name, username, avatar upload, Continue.
+- **Toast** — Success/error toast.
+- **Pagination** — “Showing X–Y of Z”, Previous/Next, page indicator.
+- **Footer** — Copy, “Add your place”, “apply to be pushed to a curator”, contact email.
+- **GoogleAnalytics** — GA4 script (measurement ID in component).
+
+### Home page (`src/app/page.tsx`)
+
+- Uses the hooks above and keeps local state for: `selectedCity`, `page`, `selectedSpot`, add-menu open state, and toast.
+- Renders: `Header`, `CityFilter`, spot grid (or loading/empty), `Pagination`, `Footer`, `SpotDetailModal`, `OnboardingModal`, `Toast`.
+- Owns `handleFilterChange`, `toggleSpotInList`, and `onOnboardingPhotoSelected`; forwards spots/profile/add-action errors into the toast.
+
 ## Supabase setup
 
 1. Create a Supabase project.
