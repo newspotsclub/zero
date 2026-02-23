@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import Script from "next/script";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase";
 
 type AdminStatus = "loading" | "not-logged-in" | "forbidden" | "allowed";
@@ -20,10 +20,28 @@ type PlacePhotoOption = {
   url: string;
 };
 
+type PromoteAdminResult = {
+  changed?: boolean;
+  email?: string | null;
+  role?: string | null;
+  user_id?: string | null;
+};
+
+type ImageLoadState = "loading" | "loaded" | "error";
+
 type GoogleAddressComponent = {
   long_name: string;
   short_name: string;
   types: string[];
+};
+
+type LoadingImageProps = {
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+  imageClassName: string;
+  containerClassName?: string;
 };
 
 declare global {
@@ -86,6 +104,70 @@ function getCityFromAddress(components: GoogleAddressComponent[] | undefined): s
   return adminAreaCandidate?.long_name ?? "";
 }
 
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedValue(value);
+    }, delayMs);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [value, delayMs]);
+
+  return debouncedValue;
+}
+
+function LoadingImage({
+  src,
+  alt,
+  width,
+  height,
+  imageClassName,
+  containerClassName = "",
+}: LoadingImageProps) {
+  const [imageOutcome, setImageOutcome] = useState<{
+    src: string;
+    status: Exclude<ImageLoadState, "loading">;
+  } | null>(null);
+  const loadState: ImageLoadState =
+    imageOutcome?.src === src ? imageOutcome.status : "loading";
+
+  return (
+    <div className={`relative overflow-hidden ${containerClassName}`}>
+      <Image
+        src={src}
+        alt={alt}
+        width={width}
+        height={height}
+        className={`${imageClassName} transition-opacity duration-200 ${
+          loadState === "loaded" ? "opacity-100" : "opacity-0"
+        }`}
+        unoptimized
+        onLoad={() => setImageOutcome({ src, status: "loaded" })}
+        onError={() => setImageOutcome({ src, status: "error" })}
+      />
+
+      {loadState !== "loaded" ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-neutral-100">
+          {loadState === "error" ? (
+            <span className="px-2 text-center text-[11px] text-neutral-500">
+              Image failed to load
+            </span>
+          ) : (
+            <div className="flex items-center gap-2 text-xs text-neutral-500">
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700" />
+              <span>Loading image</span>
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const supabaseConfigured = Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -110,13 +192,23 @@ export default function AdminPage() {
   const [placeSearch, setPlaceSearch] = useState("");
   const [placeSuggestions, setPlaceSuggestions] = useState<PlaceSuggestion[]>([]);
   const [placePhotos, setPlacePhotos] = useState<PlacePhotoOption[]>([]);
+  const [hasCompletedPlaceSearch, setHasCompletedPlaceSearch] = useState(false);
+  const [adminEmailToPromote, setAdminEmailToPromote] = useState("");
+  const [isPromotingAdmin, setIsPromotingAdmin] = useState(false);
+  const [lastPromotedAdmin, setLastPromotedAdmin] = useState<PromoteAdminResult | null>(
+    null,
+  );
 
   const [isSaving, setIsSaving] = useState(false);
   const [isSearchingPlace, setIsSearchingPlace] = useState(false);
   const [isFetchingPlace, setIsFetchingPlace] = useState(false);
+  const [isReadingImageFile, setIsReadingImageFile] = useState(false);
   const [mapsStatus, setMapsStatus] = useState<GoogleMapsStatus>(
     mapsApiKey ? "loading" : "idle",
   );
+  const debouncedPlaceSearch = useDebouncedValue(placeSearch, 350);
+  const autocompleteRequestIdRef = useRef(0);
+  const skipNextAutocompleteRef = useRef(false);
 
   const [toast, setToast] = useState<{
     tone: "success" | "error";
@@ -131,6 +223,8 @@ export default function AdminPage() {
   );
 
   const placesReady = mapsStatus === "ready";
+  const placeSearchValue = placeSearch.trim();
+  const debouncedPlaceSearchValue = debouncedPlaceSearch.trim();
 
   useEffect(() => {
     if (!supabaseConfigured) return;
@@ -162,39 +256,60 @@ export default function AdminPage() {
   }, [supabaseConfigured]);
 
   useEffect(() => {
+    autocompleteRequestIdRef.current += 1;
+  }, [placeSearch]);
+
+  useEffect(() => {
+    if (placeSearchValue.length >= 2) return;
+    setPlaceSuggestions([]);
+    setHasCompletedPlaceSearch(false);
+    setIsSearchingPlace(false);
+  }, [placeSearchValue]);
+
+  useEffect(() => {
     if (!placesReady) return;
 
-    const query = placeSearch.trim();
+    const query = debouncedPlaceSearchValue;
     if (query.length < 2) return;
+    if (skipNextAutocompleteRef.current) {
+      skipNextAutocompleteRef.current = false;
+      return;
+    }
 
     const googlePlaces = window.google?.maps?.places;
     if (!googlePlaces) return;
 
-    const timeout = window.setTimeout(() => {
-      setIsSearchingPlace(true);
+    let isCancelled = false;
+    const requestId = autocompleteRequestIdRef.current + 1;
+    autocompleteRequestIdRef.current = requestId;
 
-      const autocomplete = new googlePlaces.AutocompleteService();
-      autocomplete.getPlacePredictions({ input: query }, (results, statusCode) => {
-        setIsSearchingPlace(false);
+    setIsSearchingPlace(true);
+    setHasCompletedPlaceSearch(false);
 
-        if (statusCode !== googlePlaces.PlacesServiceStatus.OK || !results) {
-          setPlaceSuggestions([]);
-          return;
-        }
+    const autocomplete = new googlePlaces.AutocompleteService();
+    autocomplete.getPlacePredictions({ input: query }, (results, statusCode) => {
+      if (isCancelled || requestId !== autocompleteRequestIdRef.current) return;
 
-        setPlaceSuggestions(
-          results.slice(0, 6).map((result) => ({
-            description: result.description,
-            placeId: result.place_id,
-          })),
-        );
-      });
-    }, 250);
+      setIsSearchingPlace(false);
+      setHasCompletedPlaceSearch(true);
+
+      if (statusCode !== googlePlaces.PlacesServiceStatus.OK || !results) {
+        setPlaceSuggestions([]);
+        return;
+      }
+
+      setPlaceSuggestions(
+        results.slice(0, 6).map((result) => ({
+          description: result.description,
+          placeId: result.place_id,
+        })),
+      );
+    });
 
     return () => {
-      window.clearTimeout(timeout);
+      isCancelled = true;
     };
-  }, [placeSearch, placesReady]);
+  }, [debouncedPlaceSearchValue, placesReady]);
 
   useEffect(() => {
     if (!toast) return;
@@ -204,12 +319,23 @@ export default function AdminPage() {
     };
   }, [toast]);
 
-  const saveStatusHint = useMemo(() => {
+  const saveStatusHint = (() => {
     if (!mapsApiKey) return "Google Places key not configured.";
     if (mapsStatus === "ready") return "Google Places ready.";
     if (mapsStatus === "error") return "Google Places failed to load. Check your API key.";
     return "Loading Google Places...";
-  }, [mapsApiKey, mapsStatus]);
+  })();
+  const isSearchDebouncing =
+    placeSearchValue.length >= 2 &&
+    placeSearchValue !== debouncedPlaceSearchValue &&
+    placesReady;
+  const showNoPlaceResults =
+    placeSearchValue.length >= 2 &&
+    !isSearchDebouncing &&
+    !isSearchingPlace &&
+    !isFetchingPlace &&
+    hasCompletedPlaceSearch &&
+    placeSuggestions.length === 0;
 
   const fetchPlaceDetails = (selectedPlaceId: string, description: string) => {
     const googlePlaces = window.google?.maps?.places;
@@ -255,6 +381,7 @@ export default function AdminPage() {
             url: photo.getUrl({ maxWidth: 1200 }),
           })) ?? [];
 
+        skipNextAutocompleteRef.current = true;
         setPlaceSearch(description);
         setPlaceSuggestions([]);
         setPlaceId(nextPlaceId);
@@ -291,6 +418,8 @@ export default function AdminPage() {
         reader.readAsDataURL(file);
       });
 
+    setIsReadingImageFile(true);
+
     try {
       const dataUrl = await toDataUrl();
       setImage(dataUrl);
@@ -303,6 +432,9 @@ export default function AdminPage() {
         tone: "error",
         text: "Unable to load selected image file.",
       });
+    } finally {
+      setIsReadingImageFile(false);
+      event.currentTarget.value = "";
     }
   };
 
@@ -362,14 +494,92 @@ export default function AdminPage() {
     setPlaceSearch("");
     setPlaceSuggestions([]);
     setPlacePhotos([]);
+    setHasCompletedPlaceSearch(false);
     setToast({
       tone: "success",
       text: "Spot added successfully.",
     });
   };
 
+  const onPromoteAdmin = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setToast(null);
+    setLastPromotedAdmin(null);
+
+    if (status !== "allowed" || !userId) {
+      setToast({
+        tone: "error",
+        text: "You are not allowed to perform this action.",
+      });
+      return;
+    }
+
+    const normalizedEmail = adminEmailToPromote.trim().toLowerCase();
+    if (!normalizedEmail) {
+      setToast({
+        tone: "error",
+        text: "Please enter an email address.",
+      });
+      return;
+    }
+
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      setToast({
+        tone: "error",
+        text: "Supabase is not configured.",
+      });
+      return;
+    }
+
+    setIsPromotingAdmin(true);
+
+    const { data, error } = await supabase.rpc(
+      "promote_profile_to_admin_by_email",
+      {
+        target_email: normalizedEmail,
+      },
+    );
+
+    setIsPromotingAdmin(false);
+
+    if (error) {
+      setToast({
+        tone: "error",
+        text: error.message,
+      });
+      return;
+    }
+
+    const payload =
+      data && typeof data === "object" && !Array.isArray(data)
+        ? (data as PromoteAdminResult)
+        : null;
+    const promotedEmail =
+      typeof payload?.email === "string" && payload.email.trim()
+        ? payload.email
+        : normalizedEmail;
+    const changed = payload?.changed !== false;
+
+    setLastPromotedAdmin(payload ?? { email: promotedEmail, changed });
+    setAdminEmailToPromote("");
+    setToast({
+      tone: "success",
+      text: changed
+        ? `Granted admin access to ${promotedEmail}.`
+        : `${promotedEmail} is already an admin.`,
+    });
+  };
+
   if (status === "loading") {
-    return <main className="p-6 text-sm">Checking admin access...</main>;
+    return (
+      <main className="p-6">
+        <div className="inline-flex items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700">
+          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700" />
+          <span>Checking admin access...</span>
+        </div>
+      </main>
+    );
   }
 
   if (status === "not-logged-in") {
@@ -397,7 +607,7 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="mx-auto max-w-xl p-6">
+    <main className="mx-auto max-w-2xl p-6">
       {mapsApiKey ? (
         <Script
           src={`https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=places`}
@@ -407,36 +617,122 @@ export default function AdminPage() {
         />
       ) : null}
 
-      <h1 className="text-xl font-semibold">Admin: Add Spot</h1>
+      <h1 className="text-xl font-semibold">Admin Dashboard</h1>
       <p className="mt-1 text-sm text-neutral-600">
-        Search and select a Google Place to auto-fill details.
+        Manage admin access and add spots.
       </p>
 
-      <form onSubmit={onSubmit} className="mt-6 space-y-4">
+      <section className="mt-6 rounded-xl border border-neutral-200 bg-white p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-neutral-900">Admin Access</h2>
+            <p className="mt-1 text-xs text-neutral-600">
+              Promote an existing signed-up user to admin using their email address.
+            </p>
+          </div>
+        </div>
+
+        <form onSubmit={onPromoteAdmin} className="mt-4 space-y-3">
+          <label className="block text-sm">
+            <span className="mb-1 block">User email</span>
+            <input
+              type="email"
+              value={adminEmailToPromote}
+              onChange={(event) => setAdminEmailToPromote(event.target.value)}
+              placeholder="name@example.com"
+              className="w-full rounded-lg border border-neutral-300 px-3 py-2 disabled:bg-neutral-100"
+              disabled={isPromotingAdmin}
+              required
+            />
+            <span className="mt-1 block text-xs text-neutral-500">
+              The user must already have an account/profile row.
+            </span>
+          </label>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="submit"
+              disabled={isPromotingAdmin}
+              className="rounded-lg border border-neutral-900 bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-60"
+            >
+              {isPromotingAdmin ? "Updating access..." : "Make admin"}
+            </button>
+
+            {lastPromotedAdmin?.email ? (
+              <p className="text-xs text-neutral-600" aria-live="polite">
+                Last updated:{" "}
+                <span className="font-medium text-neutral-900">
+                  {lastPromotedAdmin.email}
+                </span>
+                {lastPromotedAdmin.changed === false ? " (already admin)" : " (promoted)"}
+              </p>
+            ) : null}
+          </div>
+        </form>
+      </section>
+
+      <section className="mt-6 rounded-xl border border-neutral-200 bg-white p-4">
+        <h2 className="text-sm font-semibold text-neutral-900">Add Spot</h2>
+        <p className="mt-1 text-sm text-neutral-600">
+          Search and select a Google Place to auto-fill details.
+        </p>
+
+        <form onSubmit={onSubmit} className="mt-6 space-y-4">
         <label className="block text-sm">
           <span className="mb-1 block">Search Google Place</span>
-          <input
-            value={placeSearch}
-            onChange={(event) => setPlaceSearch(event.target.value)}
-            placeholder="Search a place, e.g. Museum of Modern Art New York"
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2"
-            disabled={!placesReady}
-          />
+          <div className="flex gap-2">
+            <input
+              type="search"
+              value={placeSearch}
+              onChange={(event) => {
+                skipNextAutocompleteRef.current = false;
+                setPlaceSearch(event.target.value);
+                setPlaceSuggestions([]);
+                setHasCompletedPlaceSearch(false);
+              }}
+              placeholder="Search a place, e.g. Museum of Modern Art New York"
+              className="w-full rounded-lg border border-neutral-300 px-3 py-2 disabled:bg-neutral-100"
+              disabled={!placesReady}
+            />
+            {placeSearch ? (
+              <button
+                type="button"
+                onClick={() => {
+                  skipNextAutocompleteRef.current = false;
+                  setPlaceSearch("");
+                  setPlaceSuggestions([]);
+                  setHasCompletedPlaceSearch(false);
+                }}
+                className="shrink-0 rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-700 transition-colors hover:bg-neutral-100"
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
           <span className="mt-1 block text-xs text-neutral-500">{saveStatusHint}</span>
         </label>
 
-        {isSearchingPlace ? (
-          <p className="text-xs text-neutral-500">Searching places...</p>
+        {isSearchDebouncing ? (
+          <p className="text-xs text-neutral-500" aria-live="polite">
+            Waiting for typing to pause...
+          </p>
         ) : null}
 
-        {placeSearch.trim().length >= 2 && placeSuggestions.length > 0 ? (
+        {isSearchingPlace ? (
+          <p className="text-xs text-neutral-500" aria-live="polite">
+            Searching places...
+          </p>
+        ) : null}
+
+        {placeSearchValue.length >= 2 && placeSuggestions.length > 0 ? (
           <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
             {placeSuggestions.map((suggestion) => (
               <button
                 key={suggestion.placeId}
                 type="button"
                 onClick={() => fetchPlaceDetails(suggestion.placeId, suggestion.description)}
-                className="block w-full cursor-pointer border-b border-neutral-200 px-3 py-2 text-left text-sm text-neutral-900 transition-colors last:border-b-0 hover:bg-neutral-100 focus:bg-neutral-100 focus:outline-none"
+                disabled={isFetchingPlace}
+                className="block w-full cursor-pointer border-b border-neutral-200 px-3 py-2 text-left text-sm text-neutral-900 transition-colors last:border-b-0 hover:bg-neutral-100 focus:bg-neutral-100 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {suggestion.description}
               </button>
@@ -444,8 +740,16 @@ export default function AdminPage() {
           </div>
         ) : null}
 
+        {showNoPlaceResults ? (
+          <p className="rounded-lg border border-dashed border-neutral-300 px-3 py-2 text-xs text-neutral-600">
+            No places found. Try a more specific query (name + city).
+          </p>
+        ) : null}
+
         {isFetchingPlace ? (
-          <p className="text-xs text-neutral-500">Fetching selected place details...</p>
+          <p className="text-xs text-neutral-500" aria-live="polite">
+            Fetching selected place details...
+          </p>
         ) : null}
 
         <label className="block text-sm">
@@ -537,11 +841,18 @@ export default function AdminPage() {
             type="file"
             accept="image/*"
             onChange={onImageFileSelected}
-            className="block w-full rounded-lg border border-neutral-300 px-3 py-2"
+            className="block w-full rounded-lg border border-neutral-300 px-3 py-2 disabled:bg-neutral-100"
+            disabled={isSaving || isReadingImageFile}
           />
           <span className="mt-1 block text-xs text-neutral-500">
             Uploaded file is stored as a data URL in the image field.
           </span>
+          {isReadingImageFile ? (
+            <span className="mt-1 inline-flex items-center gap-2 text-xs text-neutral-500">
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700" />
+              Reading image file...
+            </span>
+          ) : null}
         </label>
 
         {placePhotos.length > 0 ? (
@@ -553,16 +864,21 @@ export default function AdminPage() {
                   key={photo.url}
                   type="button"
                   onClick={() => setImage(photo.url)}
-                  className="overflow-hidden rounded-lg border border-neutral-300"
+                  className={`overflow-hidden rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-black/20 ${
+                    image === photo.url
+                      ? "border-neutral-900 ring-1 ring-neutral-900/20"
+                      : "border-neutral-300 hover:border-neutral-400"
+                  }`}
                   title={photo.label}
+                  aria-pressed={image === photo.url}
                 >
-                  <Image
+                  <LoadingImage
                     src={photo.url}
                     alt={photo.label}
                     width={240}
                     height={160}
-                    className="h-20 w-full object-cover"
-                    unoptimized
+                    imageClassName="h-20 w-full object-cover"
+                    containerClassName="h-20 w-full"
                   />
                 </button>
               ))}
@@ -572,29 +888,46 @@ export default function AdminPage() {
 
         {image ? (
           <div>
-            <p className="mb-1 text-sm">Selected image preview</p>
-            <Image
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <p className="text-sm">Selected image preview</p>
+              <p className="text-xs text-neutral-500">Preview shows a loader while the image resolves</p>
+            </div>
+            <LoadingImage
               src={image}
               alt="Selected preview"
               width={720}
               height={288}
-              className="h-36 w-full rounded-lg border border-neutral-300 object-cover"
-              unoptimized
+              imageClassName="h-36 w-full object-cover"
+              containerClassName="h-36 w-full rounded-lg border border-neutral-300"
             />
           </div>
         ) : null}
 
-        <button
-          type="submit"
-          disabled={isSaving}
-          className="rounded-lg bg-black px-4 py-2 text-sm text-white disabled:opacity-60"
-        >
-          {isSaving ? "Saving..." : "Add spot"}
-        </button>
-      </form>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="submit"
+            disabled={isSaving || isReadingImageFile || isFetchingPlace}
+            className="rounded-lg bg-black px-4 py-2 text-sm text-white disabled:opacity-60"
+          >
+            {isSaving
+              ? "Saving..."
+              : isFetchingPlace
+                ? "Fetching place..."
+                : isReadingImageFile
+                  ? "Processing image..."
+                  : "Add spot"}
+          </button>
+          {(isFetchingPlace || isReadingImageFile) && !isSaving ? (
+            <p className="text-xs text-neutral-500">
+              Finish current loading step before saving.
+            </p>
+          ) : null}
+        </div>
+        </form>
+      </section>
 
       {toast ? (
-        <div className="fixed bottom-4 right-4 z-50">
+        <div className="fixed bottom-4 right-4 z-50" aria-live="polite" aria-atomic="true">
           <div
             className={`rounded-sm border px-3 py-2 text-xs shadow-sm ${
               toast.tone === "success"
