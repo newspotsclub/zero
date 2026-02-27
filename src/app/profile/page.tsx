@@ -969,7 +969,6 @@ export default function ProfilesPage() {
                             fill
                             className="object-cover transition duration-300 group-hover:scale-[1.03]"
                             sizes="(max-width: 768px) 50vw, 33vw"
-                            unoptimized
                           />
                         ) : (
                           <div className="grid h-full grid-cols-[4fr_1fr]">
@@ -983,7 +982,6 @@ export default function ProfilesPage() {
                                 fill
                                 className="object-cover transition duration-300 group-hover:scale-[1.03]"
                                 sizes="(max-width: 768px) 50vw, 33vw"
-                                unoptimized
                               />
                             </div>
 
@@ -1011,7 +1009,6 @@ export default function ProfilesPage() {
                                     fill
                                     className="object-cover transition duration-300 group-hover:scale-[1.03]"
                                     sizes="(max-width: 768px) 14vw, 8vw"
-                                    unoptimized
                                   />
                                 </div>
                               ))}
