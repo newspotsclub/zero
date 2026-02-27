@@ -1,5 +1,6 @@
 import Image from "next/image";
 import type { SpotEntry } from "@/types/spot";
+import { shouldBypassNextImageOptimization } from "@/lib/image-optimization";
 import { getSpotImageUrl } from "@/lib/spots";
 
 type SpotCardProps = {
@@ -11,6 +12,7 @@ export function SpotCard({ entry }: SpotCardProps) {
     entry.location.latLng ?? entry.spot.latLng,
     entry.spot.image
   );
+  const bypassOptimization = shouldBypassNextImageOptimization(imageUrl);
 
   return (
     <a
@@ -25,7 +27,7 @@ export function SpotCard({ entry }: SpotCardProps) {
         fill
         className="object-cover transition duration-300 group-hover:scale-[1.02]"
         sizes="(max-width: 768px) 50vw, 33vw"
-        unoptimized
+        unoptimized={bypassOptimization}
       />
       <div
         className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/80 to-transparent"

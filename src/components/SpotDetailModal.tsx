@@ -3,6 +3,7 @@
 import Image from "next/image";
 import type { HomeSpot } from "@/types/home";
 import { getHomeSpotImageUrl } from "@/lib/home-spots";
+import { shouldBypassNextImageOptimization } from "@/lib/image-optimization";
 
 type SpotDetailModalProps = {
   spot: HomeSpot;
@@ -10,6 +11,9 @@ type SpotDetailModalProps = {
 };
 
 export function SpotDetailModal({ spot, onClose }: SpotDetailModalProps) {
+  const imageSrc = getHomeSpotImageUrl(spot);
+  const bypassOptimization = shouldBypassNextImageOptimization(imageSrc);
+
   return (
     <div
       className="fixed inset-0 z-40 bg-black/45 p-4 md:p-6"
@@ -28,14 +32,14 @@ export function SpotDetailModal({ spot, onClose }: SpotDetailModalProps) {
               <div className="absolute inset-0 bg-neutral-200" aria-hidden />
               <Image
                 key={spot.id}
-                src={getHomeSpotImageUrl(spot)}
+                src={imageSrc}
                 alt={spot.name}
                 width={1200}
                 height={900}
                 className="relative z-0 block h-full w-full object-cover"
                 sizes="(max-width: 768px) 100vw, 50vw"
                 priority
-                unoptimized
+                unoptimized={bypassOptimization}
               />
               {!spot.verified ? (
                 <div className="absolute left-3 top-3">

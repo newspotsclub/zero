@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { shouldBypassNextImageOptimization } from "@/lib/image-optimization";
 import { getSpotImageUrl } from "@/lib/spots";
 import { getSupabaseClient } from "@/lib/supabase";
 import type { Profile } from "@/types/profile";
@@ -523,9 +524,14 @@ export default function PublicProfilePage() {
               const isInPublicList = Boolean(
                 publicList && (viewerListSpotIdsByList[publicList.id] ?? []).includes(spot.id),
               );
-              const isInPrivateList = Boolean(
-                privateList && (viewerListSpotIdsByList[privateList.id] ?? []).includes(spot.id),
-              );
+            const isInPrivateList = Boolean(
+              privateList && (viewerListSpotIdsByList[privateList.id] ?? []).includes(spot.id),
+            );
+            const spotImageUrl = getSpotImageUrl(
+              spot.lat_lng ?? undefined,
+              spot.image ?? undefined,
+            );
+            const bypassOptimization = shouldBypassNextImageOptimization(spotImageUrl);
 
               return (
                 <a
@@ -653,12 +659,12 @@ export default function PublicProfilePage() {
                 </div>
 
                 <Image
-                  src={getSpotImageUrl(spot.lat_lng ?? undefined, spot.image ?? undefined)}
+                  src={spotImageUrl}
                   alt={spot.name}
                   fill
                   className="object-cover transition duration-300 group-hover:scale-[1.02]"
                   sizes="(max-width: 768px) 50vw, 33vw"
-                  unoptimized
+                  unoptimized={bypassOptimization}
                 />
                 <div
                   className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/80 to-transparent"

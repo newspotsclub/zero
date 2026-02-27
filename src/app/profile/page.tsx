@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { formatListTitleForViewer } from "@/lib/profile-list-title";
+import { shouldBypassNextImageOptimization } from "@/lib/image-optimization";
 import { getSpotImageUrl } from "@/lib/spots";
 import { getSupabaseClient } from "@/lib/supabase";
 import type {
@@ -931,6 +932,15 @@ export default function ProfilesPage() {
               const collagePreviewSpots = list.spots.slice(0, 6);
               const primaryCollageSpot = collagePreviewSpots[0];
               const secondaryCollageSpots = collagePreviewSpots.slice(1);
+              const primaryCollageImageSrc = primaryCollageSpot
+                ? getSpotImageUrl(
+                    primaryCollageSpot.lat_lng ?? undefined,
+                    primaryCollageSpot.image ?? undefined,
+                  )
+                : "";
+              const primaryCollageBypassOptimization = primaryCollageSpot
+                ? shouldBypassNextImageOptimization(primaryCollageImageSrc)
+                : false;
 
               return (
                 <article key={list.id} className="space-y-3">
@@ -961,29 +971,23 @@ export default function ProfilesPage() {
                       {primaryCollageSpot ? (
                         secondaryCollageSpots.length === 0 ? (
                           <Image
-                            src={getSpotImageUrl(
-                              primaryCollageSpot.lat_lng ?? undefined,
-                              primaryCollageSpot.image ?? undefined,
-                            )}
+                            src={primaryCollageImageSrc}
                             alt={primaryCollageSpot.name}
                             fill
                             className="object-cover transition duration-300 group-hover:scale-[1.03]"
                             sizes="(max-width: 768px) 50vw, 33vw"
-                            unoptimized
+                            unoptimized={primaryCollageBypassOptimization}
                           />
                         ) : (
                           <div className="grid h-full grid-cols-[4fr_1fr]">
                             <div className="relative border-r border-black/20">
                               <Image
-                                src={getSpotImageUrl(
-                                  primaryCollageSpot.lat_lng ?? undefined,
-                                  primaryCollageSpot.image ?? undefined,
-                                )}
+                                src={primaryCollageImageSrc}
                                 alt={primaryCollageSpot.name}
                                 fill
                                 className="object-cover transition duration-300 group-hover:scale-[1.03]"
                                 sizes="(max-width: 768px) 50vw, 33vw"
-                                unoptimized
+                                unoptimized={primaryCollageBypassOptimization}
                               />
                             </div>
 
@@ -993,7 +997,15 @@ export default function ProfilesPage() {
                                 gridTemplateRows: `repeat(${secondaryCollageSpots.length}, minmax(0, 1fr))`,
                               }}
                             >
-                              {secondaryCollageSpots.map((collageSpot, index) => (
+                              {secondaryCollageSpots.map((collageSpot, index) => {
+                                const collageImageSrc = getSpotImageUrl(
+                                  collageSpot.lat_lng ?? undefined,
+                                  collageSpot.image ?? undefined,
+                                );
+                                const bypassOptimization =
+                                  shouldBypassNextImageOptimization(collageImageSrc);
+
+                                return (
                                 <div
                                   key={`${list.id}-collage-${collageSpot.id}`}
                                   className={`relative ${
@@ -1003,18 +1015,16 @@ export default function ProfilesPage() {
                                   }`}
                                 >
                                   <Image
-                                    src={getSpotImageUrl(
-                                      collageSpot.lat_lng ?? undefined,
-                                      collageSpot.image ?? undefined,
-                                    )}
+                                    src={collageImageSrc}
                                     alt={collageSpot.name}
                                     fill
                                     className="object-cover transition duration-300 group-hover:scale-[1.03]"
                                     sizes="(max-width: 768px) 14vw, 8vw"
-                                    unoptimized
+                                    unoptimized={bypassOptimization}
                                   />
                                 </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         )

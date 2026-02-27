@@ -4,6 +4,7 @@ import Image from "next/image";
 import type { HomeSpot } from "@/types/home";
 import type { ProfileListSummary } from "@/hooks/useProfileLists";
 import { getHomeSpotImageUrl } from "@/lib/home-spots";
+import { shouldBypassNextImageOptimization } from "@/lib/image-optimization";
 
 type HomeSpotCardProps = {
   spot: HomeSpot;
@@ -32,6 +33,9 @@ export function HomeSpotCard({
   onAddToPublicList,
   onAddToPrivateList,
 }: HomeSpotCardProps) {
+  const imageSrc = getHomeSpotImageUrl(spot);
+  const bypassOptimization = shouldBypassNextImageOptimization(imageSrc);
+
   return (
     <div className="group relative aspect-[4/5] w-full overflow-hidden rounded-md border border-black/20 bg-white/50 transition hover:border-black">
       <button
@@ -102,12 +106,12 @@ export function HomeSpotCard({
       </div>
 
       <Image
-        src={getHomeSpotImageUrl(spot)}
+        src={imageSrc}
         alt={spot.name}
         fill
         className="object-cover transition duration-300 group-hover:scale-[1.02]"
         sizes="(max-width: 768px) 50vw, 33vw"
-        unoptimized
+        unoptimized={bypassOptimization}
       />
       <div
         className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/80 to-transparent"
