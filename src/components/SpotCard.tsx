@@ -25,6 +25,7 @@ export function SpotCard({ entry }: SpotCardProps) {
         fill
         className="object-cover transition duration-300 group-hover:scale-[1.02]"
         sizes="(max-width: 768px) 50vw, 33vw"
+        unoptimized
       />
       <div
         className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/80 to-transparent"

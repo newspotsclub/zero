@@ -35,6 +35,7 @@ export function SpotDetailModal({ spot, onClose }: SpotDetailModalProps) {
                 className="relative z-0 block h-full w-full object-cover"
                 sizes="(max-width: 768px) 100vw, 50vw"
                 priority
+                unoptimized
               />
               {!spot.verified ? (
                 <div className="absolute left-3 top-3">
