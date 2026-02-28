@@ -12,6 +12,51 @@ function isAllowedImageHost(hostname: string): boolean {
   );
 }
 
+/**
+ * Google Places JS API generates ephemeral PhotoService URLs that only work
+ * in the browser. Convert them to the stable Places Photo REST API endpoint
+ * which works server-side.
+ *
+ * PhotoService URL pattern:
+ *   maps.googleapis.com/maps/api/place/js/PhotoService.GetPhoto?1s<REF>&3u<W>&...&key=<KEY>
+ *
+ * REST API URL:
+ *   maps.googleapis.com/maps/api/place/photo?photoreference=<REF>&maxwidth=<W>&key=<KEY>
+ */
+function resolvePhotoServiceUrl(url: URL): URL {
+  if (
+    url.hostname !== "maps.googleapis.com" ||
+    !url.pathname.includes("PhotoService.GetPhoto")
+  ) {
+    return url;
+  }
+
+  const search = url.search.startsWith("?") ? url.search.slice(1) : url.search;
+  const parts = search.split("&");
+
+  let photoRef = "";
+  let maxWidth = "1200";
+  let apiKey = "";
+
+  for (const part of parts) {
+    if (part.startsWith("1s")) {
+      photoRef = part.slice(2);
+    } else if (part.startsWith("3u")) {
+      maxWidth = part.slice(2);
+    } else if (part.startsWith("key=")) {
+      apiKey = part.slice(4);
+    }
+  }
+
+  if (!photoRef || !apiKey) return url;
+
+  const restUrl = new URL("https://maps.googleapis.com/maps/api/place/photo");
+  restUrl.searchParams.set("photoreference", photoRef);
+  restUrl.searchParams.set("maxwidth", maxWidth);
+  restUrl.searchParams.set("key", apiKey);
+  return restUrl;
+}
+
 export async function GET(request: NextRequest) {
   const rawUrl = request.nextUrl.searchParams.get("url")?.trim();
   if (!rawUrl) {
@@ -41,6 +86,8 @@ export async function GET(request: NextRequest) {
       { status: 400 }
     );
   }
+
+  parsed = resolvePhotoServiceUrl(parsed);
 
   const upstream = await fetch(parsed.toString(), {
     cache: "no-store",
