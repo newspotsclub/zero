@@ -16,6 +16,14 @@ import { getSupabaseClient } from "@/lib/supabase";
 
 type AdminStatus = "loading" | "not-logged-in" | "forbidden" | "allowed";
 
+type AdminSection = "add-spot" | "migrate-images" | "admin-access";
+
+const ADMIN_SECTIONS: { key: AdminSection; label: string }[] = [
+  { key: "add-spot", label: "Add Spot" },
+  { key: "migrate-images", label: "Migrate Images" },
+  { key: "admin-access", label: "Admin Access" },
+];
+
 type GoogleMapsStatus = "idle" | "loading" | "ready" | "error";
 
 type PlaceSuggestion = {
@@ -263,6 +271,7 @@ export default function AdminPage() {
   const [status, setStatus] = useState<AdminStatus>(
     supabaseConfigured ? "loading" : "forbidden",
   );
+  const [activeSection, setActiveSection] = useState<AdminSection>("add-spot");
   const [userId, setUserId] = useState<string | null>(null);
 
   const [name, setName] = useState("");
@@ -905,7 +914,7 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="mx-auto max-w-xl p-6">
+    <main className="mx-auto max-w-4xl p-6">
       {mapsApiKey ? (
         <Script
           src={`https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=places`}
@@ -920,7 +929,28 @@ export default function AdminPage() {
         Manage admin access and add spots.
       </p>
 
-      <section className="mt-6 rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-white/10 dark:bg-white/5">
+      <div className="mt-6 flex flex-col gap-6 md:flex-row">
+        <nav className="flex shrink-0 flex-row gap-1 md:w-48 md:flex-col">
+          {ADMIN_SECTIONS.map((section) => (
+            <button
+              key={section.key}
+              type="button"
+              onClick={() => setActiveSection(section.key)}
+              className={`rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                activeSection === section.key
+                  ? "bg-neutral-900 font-medium text-white dark:bg-white dark:text-black"
+                  : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-white/5"
+              }`}
+            >
+              {section.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="min-w-0 flex-1">
+
+      {activeSection === "admin-access" ? (
+      <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-white/10 dark:bg-white/5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold">Admin Access</h2>
@@ -968,8 +998,10 @@ export default function AdminPage() {
           </div>
         </form>
       </section>
+      ) : null}
 
-      <section className="mt-6 rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-white/10 dark:bg-white/5">
+      {activeSection === "migrate-images" ? (
+      <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-white/10 dark:bg-white/5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold">
@@ -1057,8 +1089,10 @@ export default function AdminPage() {
           </div>
         )}
       </section>
+      ) : null}
 
-      <section className="mt-6 rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-white/10 dark:bg-white/5">
+      {activeSection === "add-spot" ? (
+      <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-white/10 dark:bg-white/5">
         <h2 className="text-sm font-semibold">Add Spot</h2>
         <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
           Search and select a Google Place to auto-fill details.
@@ -1322,6 +1356,10 @@ export default function AdminPage() {
         </div>
         </form>
       </section>
+      ) : null}
+
+        </div>
+      </div>
 
       {toast ? (
         <div className="fixed bottom-4 right-4 z-50" aria-live="polite" aria-atomic="true">
