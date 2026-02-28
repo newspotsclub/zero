@@ -16,8 +16,10 @@ export function useSpots(selectedCity: string, page: number) {
   useEffect(() => {
     const supabase = getSupabaseClient();
     if (!supabase) {
-      setIsSpotsLoading(false);
-      setSpotsError("Supabase is not configured yet.");
+      queueMicrotask(() => {
+        setIsSpotsLoading(false);
+        setSpotsError("Supabase is not configured yet.");
+      });
       return;
     }
 
@@ -41,17 +43,23 @@ export function useSpots(selectedCity: string, page: number) {
     if (!supabase) return;
 
     let cancelled = false;
-    setIsSpotsLoading(true);
-    setSpotsError(null);
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setIsSpotsLoading(true);
+      setSpotsError(null);
+    });
 
     const from = (page - 1) * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
     let query = supabase
       .from("spots")
-      .select("id, name, city, maps_link, lat_lng, image, verified, hero_dish", {
+      .select(
+        "id, name, city, maps_link, lat_lng, image, image_storage_id, verified, hero_dish",
+        {
         count: "exact",
-      })
+        }
+      )
       .order("created_at", { ascending: false })
       .range(from, to);
 

@@ -6,6 +6,7 @@ export type Location = {
 
 export type Spot = {
   image?: string;
+  imageStorageId?: string;
   name: string;
   latLng?: string;
   verified?: boolean;

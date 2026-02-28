@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { shouldBypassNextImageOptimization } from "@/lib/image-optimization";
 import { getSpotImageUrl } from "@/lib/spots";
 import { getSupabaseClient } from "@/lib/supabase";
 import type { Profile } from "@/types/profile";
@@ -19,6 +18,7 @@ type SpotRecord = {
   maps_link: string;
   lat_lng: string | null;
   image: string | null;
+  image_storage_id: string | null;
 };
 
 type ViewerProfileList = {
@@ -251,7 +251,7 @@ export default function PublicProfilePage() {
 
       const { data: spotRows, error: spotsError } = await supabase
         .from("spots")
-        .select("id, name, city, maps_link, lat_lng, image")
+        .select("id, name, city, maps_link, lat_lng, image, image_storage_id")
         .in("id", spotIds);
 
       if (spotsError) {
@@ -524,14 +524,14 @@ export default function PublicProfilePage() {
               const isInPublicList = Boolean(
                 publicList && (viewerListSpotIdsByList[publicList.id] ?? []).includes(spot.id),
               );
-            const isInPrivateList = Boolean(
-              privateList && (viewerListSpotIdsByList[privateList.id] ?? []).includes(spot.id),
-            );
-            const spotImageUrl = getSpotImageUrl(
-              spot.lat_lng ?? undefined,
-              spot.image ?? undefined,
-            );
-            const bypassOptimization = shouldBypassNextImageOptimization(spotImageUrl);
+              const isInPrivateList = Boolean(
+                privateList && (viewerListSpotIdsByList[privateList.id] ?? []).includes(spot.id),
+              );
+              const spotImageUrl = getSpotImageUrl(
+                spot.lat_lng ?? undefined,
+                spot.image ?? undefined,
+                spot.image_storage_id ?? undefined,
+              );
 
               return (
                 <a
@@ -664,7 +664,6 @@ export default function PublicProfilePage() {
                   fill
                   className="object-cover transition duration-300 group-hover:scale-[1.02]"
                   sizes="(max-width: 768px) 50vw, 33vw"
-                  unoptimized={bypassOptimization}
                 />
                 <div
                   className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/80 to-transparent"

@@ -111,6 +111,7 @@ async function main() {
     await ensureColumn("profiles", "avatar_url");
     await ensureColumn("profiles", "updated_at");
     await ensureColumn("spots", "place_id");
+    await ensureColumn("spots", "image_storage_id");
     await ensureColumn("profile_lists", "slug");
 
     console.log("DB verify passed: tables, RLS, and policies are present.");

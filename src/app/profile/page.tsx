@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { formatListTitleForViewer } from "@/lib/profile-list-title";
-import { shouldBypassNextImageOptimization } from "@/lib/image-optimization";
 import { getSpotImageUrl } from "@/lib/spots";
 import { getSupabaseClient } from "@/lib/supabase";
 import type {
@@ -21,6 +20,7 @@ type SpotRecord = {
   maps_link: string;
   lat_lng: string | null;
   image: string | null;
+  image_storage_id: string | null;
 };
 
 type ProfileListWithSpots = ProfileList & {
@@ -251,7 +251,7 @@ export default function ProfilesPage() {
             : Promise.resolve({ data: [], error: null }),
           supabase
             .from("spots")
-            .select("id, name, city, maps_link, lat_lng, image")
+            .select("id, name, city, maps_link, lat_lng, image, image_storage_id")
             .order("created_at", { ascending: false }),
         ]);
 
@@ -936,11 +936,9 @@ export default function ProfilesPage() {
                 ? getSpotImageUrl(
                     primaryCollageSpot.lat_lng ?? undefined,
                     primaryCollageSpot.image ?? undefined,
+                    primaryCollageSpot.image_storage_id ?? undefined,
                   )
                 : "";
-              const primaryCollageBypassOptimization = primaryCollageSpot
-                ? shouldBypassNextImageOptimization(primaryCollageImageSrc)
-                : false;
 
               return (
                 <article key={list.id} className="space-y-3">
@@ -976,7 +974,6 @@ export default function ProfilesPage() {
                             fill
                             className="object-cover transition duration-300 group-hover:scale-[1.03]"
                             sizes="(max-width: 768px) 50vw, 33vw"
-                            unoptimized={primaryCollageBypassOptimization}
                           />
                         ) : (
                           <div className="grid h-full grid-cols-[4fr_1fr]">
@@ -987,7 +984,6 @@ export default function ProfilesPage() {
                                 fill
                                 className="object-cover transition duration-300 group-hover:scale-[1.03]"
                                 sizes="(max-width: 768px) 50vw, 33vw"
-                                unoptimized={primaryCollageBypassOptimization}
                               />
                             </div>
 
@@ -1001,9 +997,8 @@ export default function ProfilesPage() {
                                 const collageImageSrc = getSpotImageUrl(
                                   collageSpot.lat_lng ?? undefined,
                                   collageSpot.image ?? undefined,
+                                  collageSpot.image_storage_id ?? undefined,
                                 );
-                                const bypassOptimization =
-                                  shouldBypassNextImageOptimization(collageImageSrc);
 
                                 return (
                                 <div
@@ -1020,7 +1015,6 @@ export default function ProfilesPage() {
                                     fill
                                     className="object-cover transition duration-300 group-hover:scale-[1.03]"
                                     sizes="(max-width: 768px) 14vw, 8vw"
-                                    unoptimized={bypassOptimization}
                                   />
                                 </div>
                                 );

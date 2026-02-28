@@ -1,11 +1,18 @@
 import type { Spot, SpotEntry } from "@/types/spot";
 import { parseLatLng } from "./geo";
+import { getSpotImagePublicUrl } from "./spot-image-storage";
 import { getStaticMapImageUrl } from "./staticMap";
 
 const PLACEHOLDER_IMAGE =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='500' viewBox='0 0 400 500'%3E%3Crect fill='%23e5e5e5' width='400' height='500'/%3E%3C/svg%3E";
 
-export function getSpotImageUrl(latLng?: string, image?: string): string {
+export function getSpotImageUrl(
+  latLng?: string,
+  image?: string,
+  imageStorageId?: string
+): string {
+  const storageUrl = getSpotImagePublicUrl(imageStorageId);
+  if (storageUrl) return storageUrl;
   if (image) return image;
   if (latLng) {
     const coords = parseLatLng(latLng);

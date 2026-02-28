@@ -6,6 +6,7 @@ export type HomeSpot = {
   mapsLink: string;
   latLng?: string;
   image?: string;
+  imageStorageId?: string;
   verified: boolean;
   heroDish?: string;
 };
@@ -18,6 +19,7 @@ export type SpotRow = {
   maps_link: string;
   lat_lng: string | null;
   image: string | null;
+  image_storage_id: string | null;
   verified: boolean | null;
   hero_dish: string | null;
 };
