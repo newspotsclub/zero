@@ -18,6 +18,7 @@ type SpotRecord = {
   maps_link: string;
   lat_lng: string | null;
   image: string | null;
+  image_storage_id: string | null;
 };
 
 type ViewerProfileList = {
@@ -250,7 +251,7 @@ export default function PublicProfilePage() {
 
       const { data: spotRows, error: spotsError } = await supabase
         .from("spots")
-        .select("id, name, city, maps_link, lat_lng, image")
+        .select("id, name, city, maps_link, lat_lng, image, image_storage_id")
         .in("id", spotIds);
 
       if (spotsError) {
@@ -526,6 +527,11 @@ export default function PublicProfilePage() {
               const isInPrivateList = Boolean(
                 privateList && (viewerListSpotIdsByList[privateList.id] ?? []).includes(spot.id),
               );
+              const spotImageUrl = getSpotImageUrl(
+                spot.lat_lng ?? undefined,
+                spot.image ?? undefined,
+                spot.image_storage_id ?? undefined,
+              );
 
               return (
                 <a
@@ -653,7 +659,7 @@ export default function PublicProfilePage() {
                 </div>
 
                 <Image
-                  src={getSpotImageUrl(spot.lat_lng ?? undefined, spot.image ?? undefined)}
+                  src={spotImageUrl}
                   alt={spot.name}
                   fill
                   className="object-cover transition duration-300 group-hover:scale-[1.02]"

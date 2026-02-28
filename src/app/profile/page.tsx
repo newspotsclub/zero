@@ -20,6 +20,7 @@ type SpotRecord = {
   maps_link: string;
   lat_lng: string | null;
   image: string | null;
+  image_storage_id: string | null;
 };
 
 type ProfileListWithSpots = ProfileList & {
@@ -250,7 +251,7 @@ export default function ProfilesPage() {
             : Promise.resolve({ data: [], error: null }),
           supabase
             .from("spots")
-            .select("id, name, city, maps_link, lat_lng, image")
+            .select("id, name, city, maps_link, lat_lng, image, image_storage_id")
             .order("created_at", { ascending: false }),
         ]);
 
@@ -931,6 +932,13 @@ export default function ProfilesPage() {
               const collagePreviewSpots = list.spots.slice(0, 6);
               const primaryCollageSpot = collagePreviewSpots[0];
               const secondaryCollageSpots = collagePreviewSpots.slice(1);
+              const primaryCollageImageSrc = primaryCollageSpot
+                ? getSpotImageUrl(
+                    primaryCollageSpot.lat_lng ?? undefined,
+                    primaryCollageSpot.image ?? undefined,
+                    primaryCollageSpot.image_storage_id ?? undefined,
+                  )
+                : "";
 
               return (
                 <article key={list.id} className="space-y-3">
@@ -961,10 +969,7 @@ export default function ProfilesPage() {
                       {primaryCollageSpot ? (
                         secondaryCollageSpots.length === 0 ? (
                           <Image
-                            src={getSpotImageUrl(
-                              primaryCollageSpot.lat_lng ?? undefined,
-                              primaryCollageSpot.image ?? undefined,
-                            )}
+                            src={primaryCollageImageSrc}
                             alt={primaryCollageSpot.name}
                             fill
                             className="object-cover transition duration-300 group-hover:scale-[1.03]"
@@ -974,10 +979,7 @@ export default function ProfilesPage() {
                           <div className="grid h-full grid-cols-[4fr_1fr]">
                             <div className="relative border-r border-black/20">
                               <Image
-                                src={getSpotImageUrl(
-                                  primaryCollageSpot.lat_lng ?? undefined,
-                                  primaryCollageSpot.image ?? undefined,
-                                )}
+                                src={primaryCollageImageSrc}
                                 alt={primaryCollageSpot.name}
                                 fill
                                 className="object-cover transition duration-300 group-hover:scale-[1.03]"
@@ -991,7 +993,14 @@ export default function ProfilesPage() {
                                 gridTemplateRows: `repeat(${secondaryCollageSpots.length}, minmax(0, 1fr))`,
                               }}
                             >
-                              {secondaryCollageSpots.map((collageSpot, index) => (
+                              {secondaryCollageSpots.map((collageSpot, index) => {
+                                const collageImageSrc = getSpotImageUrl(
+                                  collageSpot.lat_lng ?? undefined,
+                                  collageSpot.image ?? undefined,
+                                  collageSpot.image_storage_id ?? undefined,
+                                );
+
+                                return (
                                 <div
                                   key={`${list.id}-collage-${collageSpot.id}`}
                                   className={`relative ${
@@ -1001,17 +1010,15 @@ export default function ProfilesPage() {
                                   }`}
                                 >
                                   <Image
-                                    src={getSpotImageUrl(
-                                      collageSpot.lat_lng ?? undefined,
-                                      collageSpot.image ?? undefined,
-                                    )}
+                                    src={collageImageSrc}
                                     alt={collageSpot.name}
                                     fill
                                     className="object-cover transition duration-300 group-hover:scale-[1.03]"
                                     sizes="(max-width: 768px) 14vw, 8vw"
                                   />
                                 </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         )

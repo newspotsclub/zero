@@ -9,7 +9,8 @@ type SpotCardProps = {
 export function SpotCard({ entry }: SpotCardProps) {
   const imageUrl = getSpotImageUrl(
     entry.location.latLng ?? entry.spot.latLng,
-    entry.spot.image
+    entry.spot.image,
+    entry.spot.imageStorageId
   );
 
   return (

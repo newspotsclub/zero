@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-export DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock"
+COLIMA_DOCKER_SOCK="unix://${HOME}/.colima/default/docker.sock"
 
 NEXT_PID=""
 
@@ -18,8 +18,8 @@ cleanup() {
     npx supabase stop >/dev/null 2>&1 || true
   fi
 
-  if colima status >/dev/null 2>&1; then
-    colima stop >/dev/null 2>&1 || true
+  if env -u DOCKER_HOST colima status >/dev/null 2>&1; then
+    env -u DOCKER_HOST colima stop >/dev/null 2>&1 || true
   fi
 }
 
@@ -37,10 +37,12 @@ if [[ ! -f "$SCRIPT_DIR/.env.local" ]]; then
   exit 1
 fi
 
-if ! colima status >/dev/null 2>&1; then
+if ! env -u DOCKER_HOST colima status >/dev/null 2>&1; then
   echo "Starting Colima..."
-  colima start --cpu 2 --memory 4 --disk 20 >/dev/null 2>&1
+  env -u DOCKER_HOST colima start --cpu 2 --memory 4 --disk 20 >/dev/null 2>&1
 fi
+
+export DOCKER_HOST="$COLIMA_DOCKER_SOCK"
 
 if ! npx supabase status >/dev/null 2>&1; then
   echo "Starting local Supabase..."
