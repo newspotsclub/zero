@@ -16,6 +16,14 @@ import { getSupabaseClient } from "@/lib/supabase";
 
 type AdminStatus = "loading" | "not-logged-in" | "forbidden" | "allowed";
 
+type AdminSection = "add-spot" | "migrate-images" | "admin-access";
+
+const ADMIN_SECTIONS: { key: AdminSection; label: string }[] = [
+  { key: "add-spot", label: "Add Spot" },
+  { key: "migrate-images", label: "Migrate Images" },
+  { key: "admin-access", label: "Admin Access" },
+];
+
 type GoogleMapsStatus = "idle" | "loading" | "ready" | "error";
 
 type PlaceSuggestion = {
@@ -236,14 +244,14 @@ function LoadingImage({
       />
 
       {loadState !== "loaded" ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-neutral-100">
+        <div className="absolute inset-0 flex items-center justify-center bg-neutral-100 dark:bg-neutral-800">
           {loadState === "error" ? (
-            <span className="px-2 text-center text-[11px] text-neutral-500">
+            <span className="px-2 text-center text-[11px] text-neutral-500 dark:text-neutral-400">
               Image failed to load
             </span>
           ) : (
-            <div className="flex items-center gap-2 text-xs text-neutral-500">
-              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700" />
+            <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700 dark:border-neutral-600 dark:border-t-neutral-100" />
               <span>Loading image</span>
             </div>
           )}
@@ -263,6 +271,7 @@ export default function AdminPage() {
   const [status, setStatus] = useState<AdminStatus>(
     supabaseConfigured ? "loading" : "forbidden",
   );
+  const [activeSection, setActiveSection] = useState<AdminSection>("add-spot");
   const [userId, setUserId] = useState<string | null>(null);
 
   const [name, setName] = useState("");
@@ -872,8 +881,8 @@ export default function AdminPage() {
   if (status === "loading") {
     return (
       <main className="p-6">
-        <div className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-neutral-200">
-          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-neutral-600 border-t-neutral-100" />
+        <div className="inline-flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700 dark:border-white/10 dark:bg-white/5 dark:text-neutral-200">
+          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700 dark:border-neutral-600 dark:border-t-neutral-100" />
           <span>Checking admin access...</span>
         </div>
       </main>
@@ -883,7 +892,7 @@ export default function AdminPage() {
   if (status === "not-logged-in") {
     return (
       <main className="p-6">
-        <p className="text-sm text-neutral-700">Please login to access admin page.</p>
+        <p className="text-sm text-neutral-700 dark:text-neutral-300">Please login to access admin page.</p>
         <Link href="/login" className="mt-2 inline-block text-sm underline">
           Go to login
         </Link>
@@ -894,7 +903,7 @@ export default function AdminPage() {
   if (status !== "allowed") {
     return (
       <main className="p-6">
-        <p className="text-sm text-red-700">
+        <p className="text-sm text-red-700 dark:text-red-400">
           Access denied. This page is available only for admins.
         </p>
         <Link href="/" className="mt-2 inline-block text-sm underline">
@@ -905,7 +914,7 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="mx-auto max-w-xl p-6 text-neutral-100">
+    <main className="mx-auto max-w-4xl p-6">
       {mapsApiKey ? (
         <Script
           src={`https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=places`}
@@ -916,15 +925,36 @@ export default function AdminPage() {
       ) : null}
 
       <h1 className="text-xl font-semibold">Admin Dashboard</h1>
-      <p className="mt-1 text-sm text-neutral-400">
+      <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
         Manage admin access and add spots.
       </p>
 
-      <section className="mt-6 rounded-xl border border-white/10 bg-white/5 p-4">
+      <div className="mt-6 flex flex-col gap-6 md:flex-row">
+        <nav className="flex shrink-0 flex-row gap-1 md:w-48 md:flex-col">
+          {ADMIN_SECTIONS.map((section) => (
+            <button
+              key={section.key}
+              type="button"
+              onClick={() => setActiveSection(section.key)}
+              className={`rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                activeSection === section.key
+                  ? "bg-neutral-900 font-medium text-white dark:bg-white dark:text-black"
+                  : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-white/5"
+              }`}
+            >
+              {section.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="min-w-0 flex-1">
+
+      {activeSection === "admin-access" ? (
+      <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-white/10 dark:bg-white/5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold text-neutral-100">Admin Access</h2>
-            <p className="mt-1 text-xs text-neutral-400">
+            <h2 className="text-sm font-semibold">Admin Access</h2>
+            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
               Promote an existing signed-up user to admin using their email address.
             </p>
           </div>
@@ -938,11 +968,11 @@ export default function AdminPage() {
               value={adminEmailToPromote}
               onChange={(event) => setAdminEmailToPromote(event.target.value)}
               placeholder="name@example.com"
-              className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-neutral-100 placeholder:text-neutral-500 disabled:bg-white/5"
+              className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 disabled:bg-neutral-100 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500 dark:disabled:bg-white/5"
               disabled={isPromotingAdmin}
               required
             />
-            <span className="mt-1 block text-xs text-neutral-400">
+            <span className="mt-1 block text-xs text-neutral-500 dark:text-neutral-400">
               The user must already have an account/profile row.
             </span>
           </label>
@@ -951,15 +981,15 @@ export default function AdminPage() {
             <button
               type="submit"
               disabled={isPromotingAdmin}
-              className="rounded-lg border border-white/20 bg-white px-4 py-2 text-sm font-medium text-black disabled:opacity-60"
+              className="rounded-lg border border-neutral-900 bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 dark:border-white/20 dark:bg-white dark:text-black"
             >
               {isPromotingAdmin ? "Updating access..." : "Make admin"}
             </button>
 
             {lastPromotedAdmin?.email ? (
-              <p className="text-xs text-neutral-300" aria-live="polite">
+              <p className="text-xs text-neutral-500 dark:text-neutral-300" aria-live="polite">
                 Last updated:{" "}
-                <span className="font-medium text-neutral-100">
+                <span className="font-medium text-neutral-900 dark:text-neutral-100">
                   {lastPromotedAdmin.email}
                 </span>
                 {lastPromotedAdmin.changed === false ? " (already admin)" : " (promoted)"}
@@ -968,14 +998,16 @@ export default function AdminPage() {
           </div>
         </form>
       </section>
+      ) : null}
 
-      <section className="mt-6 rounded-xl border border-white/10 bg-white/5 p-4">
+      {activeSection === "migrate-images" ? (
+      <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-white/10 dark:bg-white/5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold text-neutral-100">
+            <h2 className="text-sm font-semibold">
               Migrate Legacy Images
             </h2>
-            <p className="mt-1 text-xs text-neutral-400">
+            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
               Spots with external image URLs that haven&apos;t been moved to
               Supabase Storage yet.
             </p>
@@ -983,20 +1015,20 @@ export default function AdminPage() {
         </div>
 
         {isFetchingLegacy ? (
-          <div className="mt-4 inline-flex items-center gap-2 text-xs text-neutral-400">
-            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-neutral-600 border-t-neutral-100" />
+          <div className="mt-4 inline-flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700 dark:border-neutral-600 dark:border-t-neutral-100" />
             Loading legacy spots...
           </div>
         ) : legacySpots.length === 0 ? (
           <div className="mt-4 flex items-center justify-between gap-3">
-            <p className="text-xs text-neutral-400">
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
               All spots are using Supabase Storage. Nothing to migrate.
             </p>
             <button
               type="button"
               onClick={() => void fetchLegacySpots()}
               disabled={isFetchingLegacy}
-              className="shrink-0 rounded-lg border border-white/15 px-3 py-1.5 text-xs text-neutral-200 transition-colors hover:bg-white/10 disabled:opacity-60"
+              className="shrink-0 rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-700 transition-colors hover:bg-neutral-100 disabled:opacity-60 dark:border-white/15 dark:text-neutral-200 dark:hover:bg-white/10"
             >
               Refresh
             </button>
@@ -1008,7 +1040,7 @@ export default function AdminPage() {
                 type="button"
                 onClick={() => void migrateAllLegacySpots()}
                 disabled={isMigrating}
-                className="rounded-lg border border-white/20 bg-white px-4 py-2 text-sm font-medium text-black disabled:opacity-60"
+                className="rounded-lg border border-neutral-900 bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 dark:border-white/20 dark:bg-white dark:text-black"
               >
                 {isMigrating
                   ? `Migrating ${migrationProgress?.current ?? 0}/${migrationProgress?.total ?? 0}...`
@@ -1018,7 +1050,7 @@ export default function AdminPage() {
                 type="button"
                 onClick={() => void fetchLegacySpots()}
                 disabled={isFetchingLegacy || isMigrating}
-                className="rounded-lg border border-white/15 px-3 py-2 text-sm text-neutral-200 transition-colors hover:bg-white/10 disabled:opacity-60"
+                className="rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-700 transition-colors hover:bg-neutral-100 disabled:opacity-60 dark:border-white/15 dark:text-neutral-200 dark:hover:bg-white/10"
               >
                 Refresh
               </button>
@@ -1032,11 +1064,11 @@ export default function AdminPage() {
                 return (
                   <div
                     key={spot.id}
-                    className="flex items-center justify-between gap-2 rounded border border-white/10 px-2 py-1.5 text-xs"
+                    className="flex items-center justify-between gap-2 rounded border border-neutral-200 px-2 py-1.5 text-xs dark:border-white/10"
                   >
-                    <span className="truncate text-neutral-200">
+                    <span className="truncate text-neutral-700 dark:text-neutral-200">
                       {spot.name}{" "}
-                      <span className="text-neutral-500">({spot.city})</span>
+                      <span className="text-neutral-400 dark:text-neutral-500">({spot.city})</span>
                     </span>
                     {result ? (
                       <span
@@ -1057,10 +1089,12 @@ export default function AdminPage() {
           </div>
         )}
       </section>
+      ) : null}
 
-      <section className="mt-6 rounded-xl border border-white/10 bg-white/5 p-4">
-        <h2 className="text-sm font-semibold text-neutral-100">Add Spot</h2>
-        <p className="mt-1 text-sm text-neutral-400">
+      {activeSection === "add-spot" ? (
+      <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-white/10 dark:bg-white/5">
+        <h2 className="text-sm font-semibold">Add Spot</h2>
+        <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
           Search and select a Google Place to auto-fill details.
         </p>
 
@@ -1078,7 +1112,7 @@ export default function AdminPage() {
                 setHasCompletedPlaceSearch(false);
               }}
               placeholder="Search a place, e.g. Museum of Modern Art New York"
-              className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-neutral-100 placeholder:text-neutral-500 disabled:bg-white/5"
+              className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 disabled:bg-neutral-100 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500 dark:disabled:bg-white/5"
               disabled={!placesReady}
             />
             {placeSearch ? (
@@ -1090,23 +1124,23 @@ export default function AdminPage() {
                   setPlaceSuggestions([]);
                   setHasCompletedPlaceSearch(false);
                 }}
-                className="shrink-0 rounded-lg border border-white/15 px-3 py-2 text-sm text-neutral-200 transition-colors hover:bg-white/10"
+                className="shrink-0 rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-white/15 dark:text-neutral-200 dark:hover:bg-white/10"
               >
                 Clear
               </button>
             ) : null}
           </div>
-          <span className="mt-1 block text-xs text-neutral-400">{saveStatusHint}</span>
+          <span className="mt-1 block text-xs text-neutral-500 dark:text-neutral-400">{saveStatusHint}</span>
         </label>
 
         {isSearchDebouncing ? (
-          <p className="text-xs text-neutral-400" aria-live="polite">
+          <p className="text-xs text-neutral-500 dark:text-neutral-400" aria-live="polite">
             Waiting for typing to pause...
           </p>
         ) : null}
 
         {isSearchingPlace ? (
-          <p className="text-xs text-neutral-400" aria-live="polite">
+          <p className="text-xs text-neutral-500 dark:text-neutral-400" aria-live="polite">
             Searching places...
           </p>
         ) : null}
@@ -1128,13 +1162,13 @@ export default function AdminPage() {
         ) : null}
 
         {showNoPlaceResults ? (
-          <p className="rounded-lg border border-dashed border-white/15 px-3 py-2 text-xs text-neutral-300">
+          <p className="rounded-lg border border-dashed border-neutral-300 px-3 py-2 text-xs text-neutral-500 dark:border-white/15 dark:text-neutral-300">
             No places found. Try a more specific query (name + city).
           </p>
         ) : null}
 
         {isFetchingPlace ? (
-          <p className="text-xs text-neutral-400" aria-live="polite">
+          <p className="text-xs text-neutral-500 dark:text-neutral-400" aria-live="polite">
             Fetching selected place details...
           </p>
         ) : null}
@@ -1145,7 +1179,7 @@ export default function AdminPage() {
             value={name}
             onChange={(event) => setName(event.target.value)}
             required
-            className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-neutral-100 placeholder:text-neutral-500"
+            className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500"
           />
         </label>
 
@@ -1155,7 +1189,7 @@ export default function AdminPage() {
             value={city}
             onChange={(event) => setCity(event.target.value)}
             required
-            className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-neutral-100 placeholder:text-neutral-500"
+            className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500"
           />
         </label>
 
@@ -1166,7 +1200,7 @@ export default function AdminPage() {
             value={mapsLink}
             onChange={(event) => setMapsLink(event.target.value)}
             required
-            className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-neutral-100 placeholder:text-neutral-500"
+            className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500"
           />
         </label>
 
@@ -1176,7 +1210,7 @@ export default function AdminPage() {
             value={placeId}
             onChange={(event) => setPlaceId(event.target.value)}
             placeholder="ChIJN1t_tDeuEmsRUsoyG83frY4"
-            className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-neutral-100 placeholder:text-neutral-500"
+            className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500"
           />
         </label>
 
@@ -1186,7 +1220,7 @@ export default function AdminPage() {
             value={latLng}
             onChange={(event) => setLatLng(event.target.value)}
             placeholder="12.9628, 77.6373"
-            className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-neutral-100 placeholder:text-neutral-500"
+            className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500"
           />
         </label>
 
@@ -1201,7 +1235,7 @@ export default function AdminPage() {
               setImageFile(null);
             }}
             placeholder="https://..."
-            className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-neutral-100 placeholder:text-neutral-500"
+            className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500"
           />
         </label>
 
@@ -1212,11 +1246,11 @@ export default function AdminPage() {
             value={heroDish}
             onChange={(event) => setHeroDish(event.target.value)}
             placeholder="Spicy vodka rigatoni"
-            className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-neutral-100 placeholder:text-neutral-500"
+            className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500"
           />
         </label>
 
-        <label className="flex items-center gap-2 rounded-lg border border-white/15 bg-black/10 px-3 py-2 text-sm">
+        <label className="flex items-center gap-2 rounded-lg border border-neutral-300 bg-neutral-50 px-3 py-2 text-sm dark:border-white/15 dark:bg-black/10">
           <input
             type="checkbox"
             checked={verified}
@@ -1232,15 +1266,15 @@ export default function AdminPage() {
             type="file"
             accept="image/*"
             onChange={onImageFileSelected}
-            className="block w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-neutral-200 file:mr-3 file:rounded-md file:border-0 file:bg-white file:px-3 file:py-1 file:text-black disabled:bg-white/5"
+            className="block w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-neutral-700 file:mr-3 file:rounded-md file:border-0 file:bg-neutral-900 file:px-3 file:py-1 file:text-white disabled:bg-neutral-100 dark:border-white/15 dark:bg-black/20 dark:text-neutral-200 dark:file:bg-white dark:file:text-black dark:disabled:bg-white/5"
             disabled={isSaving || isReadingImageFile || isUploadingImage}
           />
-          <span className="mt-1 block text-xs text-neutral-400">
+          <span className="mt-1 block text-xs text-neutral-500 dark:text-neutral-400">
             Uploaded image is resized to fit within 1080x1350 and stored in Supabase Storage.
           </span>
           {isReadingImageFile ? (
-            <span className="mt-1 inline-flex items-center gap-2 text-xs text-neutral-400">
-              <span className="h-3 w-3 animate-spin rounded-full border-2 border-neutral-600 border-t-neutral-100" />
+            <span className="mt-1 inline-flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700 dark:border-neutral-600 dark:border-t-neutral-100" />
               Reading image file...
             </span>
           ) : null}
@@ -1285,7 +1319,7 @@ export default function AdminPage() {
           <div>
             <div className="mb-1 flex items-center justify-between gap-2">
               <p className="text-sm">Selected image preview</p>
-              <p className="text-xs text-neutral-400">Preview shows a loader while the image resolves</p>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">Preview shows a loader while the image resolves</p>
             </div>
             <LoadingImage
               src={imagePreview}
@@ -1293,7 +1327,7 @@ export default function AdminPage() {
               width={720}
               height={288}
               imageClassName="h-36 w-full object-cover"
-              containerClassName="h-36 w-full rounded-lg border border-neutral-300"
+              containerClassName="h-36 w-full rounded-lg border border-neutral-300 dark:border-neutral-700"
             />
           </div>
         ) : null}
@@ -1315,13 +1349,17 @@ export default function AdminPage() {
                   : "Add spot"}
           </button>
           {(isFetchingPlace || isReadingImageFile || isUploadingImage) && !isSaving ? (
-            <p className="text-xs text-neutral-400">
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
               Finish current loading step before saving.
             </p>
           ) : null}
         </div>
         </form>
       </section>
+      ) : null}
+
+        </div>
+      </div>
 
       {toast ? (
         <div className="fixed bottom-4 right-4 z-50" aria-live="polite" aria-atomic="true">
