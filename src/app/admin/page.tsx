@@ -16,10 +16,11 @@ import { getSupabaseClient } from "@/lib/supabase";
 
 type AdminStatus = "loading" | "not-logged-in" | "forbidden" | "allowed";
 
-type AdminSection = "add-spot" | "migrate-images" | "admin-access";
+type AdminSection = "add-spot" | "edit-spot" | "migrate-images" | "admin-access";
 
 const ADMIN_SECTIONS: { key: AdminSection; label: string }[] = [
   { key: "add-spot", label: "Add Spot" },
+  { key: "edit-spot", label: "Edit Spot" },
   { key: "migrate-images", label: "Migrate Images" },
   { key: "admin-access", label: "Admin Access" },
 ];
@@ -57,6 +58,19 @@ type MigrationResult = {
   name: string;
   status: "success" | "error";
   error?: string;
+};
+
+type EditableSpot = {
+  id: number;
+  name: string;
+  city: string;
+  maps_link: string;
+  place_id: string | null;
+  lat_lng: string | null;
+  image: string | null;
+  image_storage_id: string | null;
+  hero_dish: string | null;
+  verified: boolean;
 };
 
 type GoogleAddressComponent = {
@@ -307,6 +321,33 @@ export default function AdminPage() {
   const autocompleteRequestIdRef = useRef(0);
   const skipNextAutocompleteRef = useRef(false);
 
+  const [editSearchQuery, setEditSearchQuery] = useState("");
+  const [editSearchResults, setEditSearchResults] = useState<EditableSpot[]>([]);
+  const [isSearchingSpots, setIsSearchingSpots] = useState(false);
+  const [editingSpot, setEditingSpot] = useState<EditableSpot | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editCity, setEditCity] = useState("");
+  const [editMapsLink, setEditMapsLink] = useState("");
+  const [editPlaceId, setEditPlaceId] = useState("");
+  const [editLatLng, setEditLatLng] = useState("");
+  const [editImage, setEditImage] = useState("");
+  const [editImagePreview, setEditImagePreview] = useState("");
+  const [editImageFile, setEditImageFile] = useState<File | null>(null);
+  const [editHeroDish, setEditHeroDish] = useState("");
+  const [editVerified, setEditVerified] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isUploadingEditImage, setIsUploadingEditImage] = useState(false);
+  const [isReadingEditImageFile, setIsReadingEditImageFile] = useState(false);
+  const [editPlaceSearch, setEditPlaceSearch] = useState("");
+  const [editPlaceSuggestions, setEditPlaceSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [editPlacePhotos, setEditPlacePhotos] = useState<PlacePhotoOption[]>([]);
+  const [isFetchingEditPlace, setIsFetchingEditPlace] = useState(false);
+  const debouncedEditPlaceSearch = useDebouncedValue(editPlaceSearch, 350);
+  const editAutocompleteRequestIdRef = useRef(0);
+  const skipNextEditAutocompleteRef = useRef(false);
+  const [hasCompletedEditPlaceSearch, setHasCompletedEditPlaceSearch] = useState(false);
+  const [isSearchingEditPlace, setIsSearchingEditPlace] = useState(false);
+
   const [legacySpots, setLegacySpots] = useState<LegacySpot[]>([]);
   const [isFetchingLegacy, setIsFetchingLegacy] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
@@ -516,6 +557,243 @@ export default function AdminPage() {
       text: `Migration complete: ${succeeded}/${results.length} succeeded.`,
     });
     await fetchLegacySpots();
+  };
+
+  const debouncedEditSearchQuery = useDebouncedValue(editSearchQuery, 350);
+
+  useEffect(() => {
+    if (debouncedEditSearchQuery.trim().length < 2) {
+      setEditSearchResults([]);
+      return;
+    }
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+    let cancelled = false;
+    setIsSearchingSpots(true);
+    supabase
+      .from("spots")
+      .select("id, name, city, maps_link, place_id, lat_lng, image, image_storage_id, hero_dish, verified")
+      .ilike("name", `%${debouncedEditSearchQuery.trim()}%`)
+      .order("created_at", { ascending: false })
+      .limit(20)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        setIsSearchingSpots(false);
+        if (error) {
+          setToast({ tone: "error", text: "Unable to search spots." });
+          return;
+        }
+        setEditSearchResults((data ?? []) as EditableSpot[]);
+      });
+    return () => { cancelled = true; };
+  }, [debouncedEditSearchQuery]);
+
+  useEffect(() => {
+    editAutocompleteRequestIdRef.current += 1;
+  }, [editPlaceSearch]);
+
+  useEffect(() => {
+    if (editPlaceSearch.trim().length >= 2) return;
+    setEditPlaceSuggestions([]);
+    setHasCompletedEditPlaceSearch(false);
+    setIsSearchingEditPlace(false);
+  }, [editPlaceSearch]);
+
+  useEffect(() => {
+    if (!placesReady) return;
+    const query = debouncedEditPlaceSearch.trim();
+    if (query.length < 2) return;
+    if (skipNextEditAutocompleteRef.current) {
+      skipNextEditAutocompleteRef.current = false;
+      return;
+    }
+    const googlePlaces = window.google?.maps?.places;
+    if (!googlePlaces) return;
+    let isCancelled = false;
+    const requestId = editAutocompleteRequestIdRef.current + 1;
+    editAutocompleteRequestIdRef.current = requestId;
+    setIsSearchingEditPlace(true);
+    setHasCompletedEditPlaceSearch(false);
+    const autocomplete = new googlePlaces.AutocompleteService();
+    autocomplete.getPlacePredictions({ input: query }, (results, statusCode) => {
+      if (isCancelled || requestId !== editAutocompleteRequestIdRef.current) return;
+      setIsSearchingEditPlace(false);
+      setHasCompletedEditPlaceSearch(true);
+      if (statusCode !== googlePlaces.PlacesServiceStatus.OK || !results) {
+        setEditPlaceSuggestions([]);
+        return;
+      }
+      setEditPlaceSuggestions(
+        results.slice(0, 6).map((r) => ({ description: r.description, placeId: r.place_id }))
+      );
+    });
+    return () => { isCancelled = true; };
+  }, [debouncedEditPlaceSearch, placesReady]);
+
+  const selectSpotForEditing = (spot: EditableSpot) => {
+    setEditingSpot(spot);
+    setEditName(spot.name);
+    setEditCity(spot.city);
+    setEditMapsLink(spot.maps_link);
+    setEditPlaceId(spot.place_id ?? "");
+    setEditLatLng(spot.lat_lng ?? "");
+    setEditImage("");
+    setEditImagePreview("");
+    setEditImageFile(null);
+    setEditHeroDish(spot.hero_dish ?? "");
+    setEditVerified(spot.verified);
+    setEditPlaceSearch("");
+    setEditPlaceSuggestions([]);
+    setEditPlacePhotos([]);
+    setHasCompletedEditPlaceSearch(false);
+  };
+
+  const fetchEditPlaceDetails = (selectedPlaceId: string, description: string) => {
+    const googlePlaces = window.google?.maps?.places;
+    if (!googlePlaces) return;
+    setIsFetchingEditPlace(true);
+    const service = new googlePlaces.PlacesService(document.createElement("div"));
+    service.getDetails(
+      { placeId: selectedPlaceId, fields: ["place_id", "name", "url", "geometry", "address_components", "photos"] },
+      (place, statusCode) => {
+        setIsFetchingEditPlace(false);
+        if (statusCode !== googlePlaces.PlacesServiceStatus.OK || !place) {
+          setToast({ tone: "error", text: "Unable to fetch details for this place." });
+          return;
+        }
+        const nextPlaceId = place.place_id ?? selectedPlaceId;
+        const lat = place.geometry?.location?.lat();
+        const lng = place.geometry?.location?.lng();
+        const nextLatLng = typeof lat === "number" && typeof lng === "number" ? `${lat.toFixed(6)}, ${lng.toFixed(6)}` : "";
+        const nextCity = getCityFromAddress(place.address_components);
+        const photos = place.photos?.slice(0, 5).map((photo, index) => ({
+          label: `Photo ${index + 1}`,
+          url: photo.getUrl({ maxWidth: SPOT_IMAGE_MAX_WIDTH, maxHeight: SPOT_IMAGE_MAX_HEIGHT }),
+        })) ?? [];
+        skipNextEditAutocompleteRef.current = true;
+        setEditPlaceSearch(description);
+        setEditPlaceSuggestions([]);
+        setEditPlacePhotos(photos);
+        setEditPlaceId(nextPlaceId);
+        if (!editName.trim() && place.name) setEditName(place.name);
+        if (!editCity.trim() && nextCity) setEditCity(nextCity);
+        if (place.url) setEditMapsLink(place.url);
+        if (nextLatLng) setEditLatLng(nextLatLng);
+        if (!editImage && !editImageFile && photos[0]?.url) {
+          setEditImage(photos[0].url);
+          setEditImagePreview(photos[0].url);
+          setEditImageFile(null);
+        }
+        setToast({ tone: "success", text: "Place selected. Fields updated." });
+      }
+    );
+  };
+
+  const onEditImageFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_SOURCE_IMAGE_BYTES) {
+      setToast({ tone: "error", text: "Image file must be 8MB or smaller." });
+      event.currentTarget.value = "";
+      return;
+    }
+    setIsReadingEditImageFile(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Invalid file data."));
+        reader.onerror = () => reject(new Error("Unable to read file."));
+        reader.readAsDataURL(file);
+      });
+      setEditImage("");
+      setEditImagePreview(dataUrl);
+      setEditImageFile(file);
+    } catch {
+      setToast({ tone: "error", text: "Unable to load selected image file." });
+    } finally {
+      setIsReadingEditImageFile(false);
+      event.currentTarget.value = "";
+    }
+  };
+
+  const onUpdateSpot = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setToast(null);
+    if (!editingSpot || !userId) return;
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+
+    setIsUpdating(true);
+    let newImageStorageId: string | null = null;
+    const hasNewImage = editImage.trim() || editImageFile;
+
+    if (hasNewImage) {
+      setIsUploadingEditImage(true);
+      try {
+        let sourceBlob: Blob;
+        if (editImageFile) {
+          sourceBlob = editImageFile;
+        } else if (editImage.startsWith("data:image/")) {
+          sourceBlob = await (await fetch(editImage, { cache: "no-store" })).blob();
+        } else {
+          sourceBlob = await fetchSourceImageBlobFromUrl(editImage);
+        }
+        if (sourceBlob.size > MAX_SOURCE_IMAGE_BYTES) throw new Error("Source image is too large.");
+        const optimizedBlob = await optimizeSpotImageBlob(sourceBlob);
+        const objectPath = createSpotImageStoragePath(userId);
+        const { error: uploadError } = await supabase.storage
+          .from(SPOT_IMAGE_BUCKET)
+          .upload(objectPath, optimizedBlob, { contentType: SPOT_IMAGE_OUTPUT_MIME, cacheControl: "31536000", upsert: false });
+        if (uploadError) throw new Error(uploadError.message);
+        newImageStorageId = objectPath;
+      } catch (error) {
+        setToast({ tone: "error", text: error instanceof Error ? error.message : "Unable to upload image." });
+        setIsUploadingEditImage(false);
+        setIsUpdating(false);
+        return;
+      } finally {
+        setIsUploadingEditImage(false);
+      }
+    }
+
+    const updates: Record<string, unknown> = {
+      name: editName,
+      city: editCity,
+      maps_link: editMapsLink,
+      place_id: editPlaceId || null,
+      lat_lng: editLatLng || null,
+      hero_dish: editHeroDish.trim() || null,
+      verified: editVerified,
+    };
+    if (newImageStorageId) {
+      updates.image_storage_id = newImageStorageId;
+      updates.image = null;
+    }
+
+    const { error: updateError } = await supabase
+      .from("spots")
+      .update(updates)
+      .eq("id", editingSpot.id);
+
+    if (updateError && newImageStorageId) {
+      await supabase.storage.from(SPOT_IMAGE_BUCKET).remove([newImageStorageId]);
+    }
+
+    setIsUpdating(false);
+
+    if (updateError) {
+      setToast({ tone: "error", text: updateError.message });
+      return;
+    }
+
+    if (newImageStorageId && editingSpot.image_storage_id) {
+      await supabase.storage.from(SPOT_IMAGE_BUCKET).remove([editingSpot.image_storage_id]);
+    }
+
+    setToast({ tone: "success", text: `"${editName}" updated successfully.` });
+    setEditingSpot(null);
+    setEditSearchQuery("");
+    setEditSearchResults([]);
   };
 
   const saveStatusHint = (() => {
@@ -1355,6 +1633,309 @@ export default function AdminPage() {
           ) : null}
         </div>
         </form>
+      </section>
+      ) : null}
+
+      {activeSection === "edit-spot" ? (
+      <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-white/10 dark:bg-white/5">
+        <h2 className="text-sm font-semibold">Edit Spot</h2>
+        <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+          Search for a spot by name to edit its details.
+        </p>
+
+        {!editingSpot ? (
+          <div className="mt-4 space-y-3">
+            <label className="block text-sm">
+              <span className="mb-1 block">Search spots</span>
+              <input
+                type="search"
+                value={editSearchQuery}
+                onChange={(e) => setEditSearchQuery(e.target.value)}
+                placeholder="Type spot name..."
+                className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500"
+              />
+            </label>
+
+            {isSearchingSpots ? (
+              <div className="inline-flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700 dark:border-neutral-600 dark:border-t-neutral-100" />
+                Searching...
+              </div>
+            ) : null}
+
+            {editSearchQuery.trim().length >= 2 && !isSearchingSpots && editSearchResults.length === 0 ? (
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">No spots found.</p>
+            ) : null}
+
+            {editSearchResults.length > 0 ? (
+              <div className="max-h-64 space-y-1 overflow-y-auto">
+                {editSearchResults.map((spot) => (
+                  <button
+                    key={spot.id}
+                    type="button"
+                    onClick={() => selectSpotForEditing(spot)}
+                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-neutral-200 px-3 py-2 text-left text-sm transition-colors hover:bg-neutral-100 dark:border-white/10 dark:hover:bg-white/5"
+                  >
+                    <span className="truncate font-medium text-neutral-900 dark:text-neutral-100">{spot.name}</span>
+                    <span className="shrink-0 text-xs text-neutral-500 dark:text-neutral-400">{spot.city}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="mt-4">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                Editing: {editingSpot.name}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingSpot(null);
+                  setEditPlaceSearch("");
+                  setEditPlaceSuggestions([]);
+                  setEditPlacePhotos([]);
+                }}
+                className="shrink-0 rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-white/15 dark:text-neutral-200 dark:hover:bg-white/10"
+              >
+                Back to search
+              </button>
+            </div>
+
+            <form onSubmit={onUpdateSpot} className="space-y-4">
+              <label className="block text-sm">
+                <span className="mb-1 block">Re-link to Google Place (optional)</span>
+                <div className="flex gap-2">
+                  <input
+                    type="search"
+                    value={editPlaceSearch}
+                    onChange={(e) => {
+                      skipNextEditAutocompleteRef.current = false;
+                      setEditPlaceSearch(e.target.value);
+                      setEditPlaceSuggestions([]);
+                      setHasCompletedEditPlaceSearch(false);
+                    }}
+                    placeholder="Search a place to update coords/photos..."
+                    className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 disabled:bg-neutral-100 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500 dark:disabled:bg-white/5"
+                    disabled={!placesReady}
+                  />
+                  {editPlaceSearch ? (
+                    <button
+                      type="button"
+                      onClick={() => { setEditPlaceSearch(""); setEditPlaceSuggestions([]); setHasCompletedEditPlaceSearch(false); }}
+                      className="shrink-0 rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-white/15 dark:text-neutral-200 dark:hover:bg-white/10"
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
+              </label>
+
+              {isSearchingEditPlace ? (
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">Searching places...</p>
+              ) : null}
+
+              {editPlaceSearch.trim().length >= 2 && editPlaceSuggestions.length > 0 ? (
+                <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+                  {editPlaceSuggestions.map((s) => (
+                    <button
+                      key={s.placeId}
+                      type="button"
+                      onClick={() => fetchEditPlaceDetails(s.placeId, s.description)}
+                      disabled={isFetchingEditPlace}
+                      className="block w-full cursor-pointer border-b border-neutral-200 px-3 py-2 text-left text-sm text-neutral-900 transition-colors last:border-b-0 hover:bg-neutral-100 focus:bg-neutral-100 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {s.description}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              {editPlaceSearch.trim().length >= 2 && !isSearchingEditPlace && !isFetchingEditPlace && hasCompletedEditPlaceSearch && editPlaceSuggestions.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-neutral-300 px-3 py-2 text-xs text-neutral-500 dark:border-white/15 dark:text-neutral-300">
+                  No places found.
+                </p>
+              ) : null}
+
+              {isFetchingEditPlace ? (
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">Fetching place details...</p>
+              ) : null}
+
+              <label className="block text-sm">
+                <span className="mb-1 block">Name</span>
+                <input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  required
+                  className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500"
+                />
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-1 block">City</span>
+                <input
+                  value={editCity}
+                  onChange={(e) => setEditCity(e.target.value)}
+                  required
+                  className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500"
+                />
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-1 block">Google Maps link</span>
+                <input
+                  type="url"
+                  value={editMapsLink}
+                  onChange={(e) => setEditMapsLink(e.target.value)}
+                  required
+                  className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500"
+                />
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-1 block">Place ID (optional)</span>
+                <input
+                  value={editPlaceId}
+                  onChange={(e) => setEditPlaceId(e.target.value)}
+                  placeholder="ChIJN1t_tDeuEmsRUsoyG83frY4"
+                  className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500"
+                />
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-1 block">Lat/Lng (optional)</span>
+                <input
+                  value={editLatLng}
+                  onChange={(e) => setEditLatLng(e.target.value)}
+                  placeholder="12.9628, 77.6373"
+                  className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500"
+                />
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-1 block">New image URL (optional, replaces current)</span>
+                <input
+                  type="text"
+                  value={editImage}
+                  onChange={(e) => { setEditImage(e.target.value); setEditImagePreview(e.target.value); setEditImageFile(null); }}
+                  placeholder="https://..."
+                  className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500"
+                />
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-1 block">Hero dish (optional)</span>
+                <input
+                  type="text"
+                  value={editHeroDish}
+                  onChange={(e) => setEditHeroDish(e.target.value)}
+                  placeholder="Spicy vodka rigatoni"
+                  className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500"
+                />
+              </label>
+
+              <label className="flex items-center gap-2 rounded-lg border border-neutral-300 bg-neutral-50 px-3 py-2 text-sm dark:border-white/15 dark:bg-black/10">
+                <input
+                  type="checkbox"
+                  checked={editVerified}
+                  onChange={(e) => setEditVerified(e.target.checked)}
+                  className="h-4 w-4"
+                />
+                <span>Mark as verified</span>
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-1 block">Or upload new image file</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={onEditImageFileSelected}
+                  className="block w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-neutral-700 file:mr-3 file:rounded-md file:border-0 file:bg-neutral-900 file:px-3 file:py-1 file:text-white disabled:bg-neutral-100 dark:border-white/15 dark:bg-black/20 dark:text-neutral-200 dark:file:bg-white dark:file:text-black dark:disabled:bg-white/5"
+                  disabled={isUpdating || isReadingEditImageFile || isUploadingEditImage}
+                />
+                {isReadingEditImageFile ? (
+                  <span className="mt-1 inline-flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700 dark:border-neutral-600 dark:border-t-neutral-100" />
+                    Reading image file...
+                  </span>
+                ) : null}
+              </label>
+
+              {editPlacePhotos.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-sm">Choose a photo from selected place</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {editPlacePhotos.map((photo) => (
+                      <button
+                        key={photo.url}
+                        type="button"
+                        onClick={() => { setEditImage(photo.url); setEditImagePreview(photo.url); setEditImageFile(null); }}
+                        className={`overflow-hidden rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-black/20 ${
+                          editImage === photo.url
+                            ? "border-neutral-900 ring-1 ring-neutral-900/20"
+                            : "border-neutral-300 hover:border-neutral-400"
+                        }`}
+                        title={photo.label}
+                        aria-pressed={editImage === photo.url}
+                      >
+                        <LoadingImage
+                          src={photo.url}
+                          alt={photo.label}
+                          width={240}
+                          height={160}
+                          imageClassName="h-20 w-full object-cover"
+                          containerClassName="h-20 w-full"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {editImagePreview ? (
+                <div>
+                  <p className="mb-1 text-sm">New image preview</p>
+                  <LoadingImage
+                    src={editImagePreview}
+                    alt="Edit preview"
+                    width={720}
+                    height={288}
+                    imageClassName="h-36 w-full object-cover"
+                    containerClassName="h-36 w-full rounded-lg border border-neutral-300 dark:border-neutral-700"
+                  />
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={isUpdating || isReadingEditImageFile || isFetchingEditPlace || isUploadingEditImage}
+                  className="rounded-lg bg-black px-4 py-2 text-sm text-white disabled:opacity-60 dark:bg-white dark:text-black"
+                >
+                  {isUpdating
+                    ? "Saving..."
+                    : isUploadingEditImage
+                      ? "Uploading image..."
+                      : "Update spot"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingSpot(null);
+                    setEditPlaceSearch("");
+                    setEditPlaceSuggestions([]);
+                    setEditPlacePhotos([]);
+                  }}
+                  disabled={isUpdating}
+                  className="rounded-lg border border-neutral-300 px-4 py-2 text-sm text-neutral-700 transition-colors hover:bg-neutral-100 disabled:opacity-60 dark:border-white/15 dark:text-neutral-200 dark:hover:bg-white/10"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
       </section>
       ) : null}
 
