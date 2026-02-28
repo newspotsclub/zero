@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import { CityFilter } from "@/components/CityFilter";
@@ -41,6 +41,7 @@ export default function Home() {
     tone: "success" | "error";
     text: string;
   } | null>(null);
+  const scrollAnimationFrameRef = useRef<number | null>(null);
 
   const {
     spots,
@@ -105,6 +106,49 @@ export default function Home() {
       profile.setOnboardingError(null);
     }
   }, [profile.onboardingError]);
+
+  useEffect(() => () => {
+    if (scrollAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(scrollAnimationFrameRef.current);
+      scrollAnimationFrameRef.current = null;
+    }
+  }, []);
+
+  const scrollToTopWithEaseInOut = () => {
+    if (typeof window === "undefined") return;
+    const startY = window.scrollY;
+    if (startY <= 0) return;
+
+    if (scrollAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(scrollAnimationFrameRef.current);
+      scrollAnimationFrameRef.current = null;
+    }
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      window.scrollTo({ top: 0 });
+      return;
+    }
+
+    const durationMs = 720;
+    const startedAt = performance.now();
+    const easeInOutCubic = (t: number) =>
+      t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+    const animate = (timestamp: number) => {
+      const elapsed = timestamp - startedAt;
+      const progress = Math.min(elapsed / durationMs, 1);
+      const eased = easeInOutCubic(progress);
+      window.scrollTo({ top: Math.round(startY * (1 - eased)) });
+
+      if (progress < 1) {
+        scrollAnimationFrameRef.current = window.requestAnimationFrame(animate);
+      } else {
+        scrollAnimationFrameRef.current = null;
+      }
+    };
+
+    scrollAnimationFrameRef.current = window.requestAnimationFrame(animate);
+  };
 
   const handleFilterChange = (city: string) => {
     setSelectedCity(city);
@@ -326,14 +370,9 @@ export default function Home() {
             <Pagination
               page={page}
               totalPages={totalPages}
-              totalCount={totalCount}
-              onPrevious={() => {
-                window.scrollTo({ top: 0, behavior: "smooth" });
-                setPage((p) => Math.max(1, p - 1));
-              }}
-              onNext={() => {
-                window.scrollTo({ top: 0, behavior: "smooth" });
-                setPage((p) => Math.min(totalPages, p + 1));
+              onGoToPage={(p) => {
+                scrollToTopWithEaseInOut();
+                setPage(p);
               }}
             />
           ) : null}

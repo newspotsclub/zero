@@ -1,51 +1,60 @@
 "use client";
 
-import { PAGE_SIZE } from "@/lib/constants";
-
 type PaginationProps = {
   page: number;
   totalPages: number;
-  totalCount: number;
-  onPrevious: () => void;
-  onNext: () => void;
+  onGoToPage: (page: number) => void;
 };
 
-export function Pagination({
-  page,
-  totalPages,
-  totalCount,
-  onPrevious,
-  onNext,
-}: PaginationProps) {
-  const from = (page - 1) * PAGE_SIZE + 1;
-  const to = Math.min(page * PAGE_SIZE, totalCount);
+export function Pagination({ page, totalPages, onGoToPage }: PaginationProps) {
+  if (totalPages <= 1) return null;
+
+  const pageNumbers: number[] = [];
+  for (let i = 1; i <= totalPages; i++) pageNumbers.push(i);
 
   return (
-    <div className="mt-7 grid grid-cols-2 items-center gap-2 text-xs text-neutral-600 md:grid-cols-4">
-      <p className="md:col-span-2">
-        Showing {from}-{to} of {totalCount}
-      </p>
-      <div className="flex items-center gap-2 md:justify-end">
+    <div className="mt-7 flex items-center justify-center gap-1 text-xs">
+      {page > 1 ? (
         <button
           type="button"
-          onClick={onPrevious}
-          disabled={page <= 1}
-          className="border border-black/20 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-700 disabled:opacity-40"
+          onClick={() => onGoToPage(1)}
+          className="border border-black/20 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-700"
         >
-          Previous
+          First
         </button>
+      ) : null}
+      {page > 1 ? (
         <button
           type="button"
-          onClick={onNext}
-          disabled={page >= totalPages}
-          className="border border-black/20 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-700 disabled:opacity-40"
+          onClick={() => onGoToPage(page - 1)}
+          className="border border-black/20 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-700"
+        >
+          Prev
+        </button>
+      ) : null}
+      {pageNumbers.map((p) => (
+        <button
+          key={p}
+          type="button"
+          onClick={() => onGoToPage(p)}
+          className={`border px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] ${
+            p === page
+              ? "border-black bg-black text-white"
+              : "border-black/20 text-neutral-700 hover:bg-neutral-100"
+          }`}
+        >
+          {p}
+        </button>
+      ))}
+      {page < totalPages ? (
+        <button
+          type="button"
+          onClick={() => onGoToPage(page + 1)}
+          className="border border-black/20 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-700"
         >
           Next
         </button>
-      </div>
-      <p className="text-right">
-        Page {page} of {totalPages}
-      </p>
+      ) : null}
     </div>
   );
 }
