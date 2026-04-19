@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 type HeaderProps = {
   sessionLoading: boolean;
@@ -30,6 +31,8 @@ export function Header({
             For folks who taste bad coffee and eat bad burgers for their friends.
           </p>
         </div>
+
+        <ThemeToggle />
 
         {sessionLoading ? (
           <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-neutral-500">
