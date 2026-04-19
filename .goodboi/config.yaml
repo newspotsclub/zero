@@ -1,0 +1,25 @@
+version: 0.1.0
+project_summary: "```yaml\nname: zero\ndescription: A curated list of new spots to\
+  \ explore in and around you, allowing users to browse places by city, see map previews,\
+  \ and open them in Google Maps.\ntech_stack:\n  languages: [JavaScript, TypeScript]\n\
+  \  frameworks: [Next.js, React]\n  databases: [Supabase]\n  infra: [Google Maps\
+  \ API]\narchitecture: Component-based architecture with a focus on reusable components\
+  \ and hooks for state management.\nkey_directories:\n  - path: src/\n    purpose:\
+  \ Contains the main application code, including components, hooks, and utilities.\n\
+  \  - path: supabase/\n    purpose: Contains database migrations, configuration,\
+  \ and seed data for Supabase.\n  - path: scripts/\n    purpose: Contains various\
+  \ scripts for database management and other utilities.\nconventions:\n  - Use of\
+  \ functional components and hooks in React.\nentry_points:\n  - src/app/page.tsx\n\
+  \  - next.config.ts\nexisting_docs_summary: The project includes a README.md that\
+  \ outlines the purpose, structure, and usage of the application, as well as a product\
+  \ document detailing tasks and features to be implemented.\n```"
+settings:
+  default_model: gpt-4o
+  port: 8000
+agents:
+  feature_request:
+    enabled: true
+  prd_writer:
+    enabled: true
+validators: []
+connections: []
