@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTheme } from "@/components/ThemeProvider";
 
 type HeaderProps = {
   sessionLoading: boolean;
@@ -19,6 +20,8 @@ export function Header({
   supabaseConfigured,
   onSignOut,
 }: HeaderProps) {
+  const { theme, toggleTheme } = useTheme();
+
   return (
     <div className="mb-8 border-b border-black/20 pb-4 md:mb-10">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
@@ -30,6 +33,13 @@ export function Header({
             For folks who taste bad coffee and eat bad burgers for their friends.
           </p>
         </div>
+
+        <button
+          onClick={toggleTheme}
+          className="font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-600 underline decoration-black/25 underline-offset-4 transition hover:text-black hover:decoration-black"
+        >
+          Toggle {theme === "light" ? "Dark" : "Light"} Mode
+        </button>
 
         {sessionLoading ? (
           <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-neutral-500">
