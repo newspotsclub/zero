@@ -6,12 +6,18 @@ import { mapRowToSpot } from "@/lib/home-spots";
 import type { HomeSpot, SpotRow } from "@/types/home";
 import { PAGE_SIZE } from "@/lib/constants";
 
-export function useSpots(selectedCity: string, page: number) {
+export function useSpots(selectedCity: string, page: number, searchQuery = "") {
   const [spots, setSpots] = useState<HomeSpot[]>([]);
   const [cities, setCities] = useState<string[]>(["All"]);
   const [totalCount, setTotalCount] = useState(0);
   const [isSpotsLoading, setIsSpotsLoading] = useState(true);
   const [spotsError, setSpotsError] = useState<string | null>(null);
+  const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery), 350);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
 
   useEffect(() => {
     const supabase = getSupabaseClient();
@@ -56,14 +62,17 @@ export function useSpots(selectedCity: string, page: number) {
       .from("spots")
       .select(
         "id, name, city, maps_link, lat_lng, image, image_storage_id, verified, hero_dish, address",
-        {
-        count: "exact",
-        }
+        { count: "exact" }
       )
       .order("created_at", { ascending: false })
       .range(from, to);
 
     if (selectedCity !== "All") query = query.eq("city", selectedCity);
+
+    const q = debouncedSearch.trim();
+    if (q.length >= 2) {
+      query = query.or(`name.ilike.%${q}%,address.ilike.%${q}%`);
+    }
 
     query.then(({ data, error, count }) => {
       if (cancelled) return;
@@ -81,7 +90,7 @@ export function useSpots(selectedCity: string, page: number) {
     return () => {
       cancelled = true;
     };
-  }, [selectedCity, page]);
+  }, [selectedCity, page, debouncedSearch]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   return {

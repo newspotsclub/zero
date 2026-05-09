@@ -665,7 +665,7 @@ export default function AdminPage() {
     supabase
       .from("spots")
       .select("id, name, city, maps_link, place_id, lat_lng, image, image_storage_id, hero_dish, address, verified")
-      .ilike("name", `%${debouncedEditSearchQuery.trim()}%`)
+      .or(`name.ilike.%${debouncedEditSearchQuery.trim()}%,address.ilike.%${debouncedEditSearchQuery.trim()}%`)
       .order("created_at", { ascending: false })
       .limit(20)
       .then(({ data, error }) => {
