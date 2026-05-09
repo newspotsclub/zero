@@ -9,6 +9,7 @@ export type HomeSpot = {
   imageStorageId?: string;
   verified: boolean;
   heroDish?: string;
+  address?: string;
 };
 
 /** Row shape from Supabase spots table. */
@@ -22,4 +23,5 @@ export type SpotRow = {
   image_storage_id: string | null;
   verified: boolean | null;
   hero_dish: string | null;
+  address: string | null;
 };
