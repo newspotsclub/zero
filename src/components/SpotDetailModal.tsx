@@ -60,6 +60,9 @@ export function SpotDetailModal({ spot, onClose }: SpotDetailModalProps) {
                   <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.14em] text-neutral-600">
                     {spot.city}
                   </p>
+                  {spot.address ? (
+                    <p className="mt-1 text-xs text-neutral-500">{spot.address}</p>
+                  ) : null}
                 </div>
               </div>
 

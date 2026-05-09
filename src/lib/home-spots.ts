@@ -35,5 +35,6 @@ export function mapRowToSpot(row: SpotRow): HomeSpot {
     imageStorageId: row.image_storage_id ?? undefined,
     verified: row.verified ?? false,
     heroDish: row.hero_dish?.trim() || undefined,
+    address: row.address?.trim() || undefined,
   };
 }

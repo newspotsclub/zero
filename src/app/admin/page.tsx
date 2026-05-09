@@ -16,12 +16,13 @@ import { getSupabaseClient } from "@/lib/supabase";
 
 type AdminStatus = "loading" | "not-logged-in" | "forbidden" | "allowed";
 
-type AdminSection = "add-spot" | "edit-spot" | "migrate-images" | "admin-access";
+type AdminSection = "add-spot" | "edit-spot" | "migrate-images" | "backfill-addresses" | "admin-access";
 
 const ADMIN_SECTIONS: { key: AdminSection; label: string }[] = [
   { key: "add-spot", label: "Add Spot" },
   { key: "edit-spot", label: "Edit Spot" },
   { key: "migrate-images", label: "Migrate Images" },
+  { key: "backfill-addresses", label: "Backfill Addresses" },
   { key: "admin-access", label: "Admin Access" },
 ];
 
@@ -53,6 +54,21 @@ type LegacySpot = {
   image: string;
 };
 
+type AddressBackfillSpot = {
+  id: number;
+  name: string;
+  city: string;
+  place_id: string;
+};
+
+type BackfillResult = {
+  spotId: number;
+  name: string;
+  status: "success" | "error" | "skipped";
+  address?: string;
+  error?: string;
+};
+
 type MigrationResult = {
   spotId: number;
   name: string;
@@ -70,6 +86,7 @@ type EditableSpot = {
   image: string | null;
   image_storage_id: string | null;
   hero_dish: string | null;
+  address: string | null;
   verified: boolean;
 };
 
@@ -119,6 +136,7 @@ declare global {
                         location?: { lat: () => number; lng: () => number };
                       };
                       name?: string;
+                      formatted_address?: string;
                       photos?: Array<{ getUrl: (options: { maxWidth: number; maxHeight?: number }) => string }>;
                       place_id?: string;
                       url?: string;
@@ -297,6 +315,7 @@ export default function AdminPage() {
   const [imagePreview, setImagePreview] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [heroDish, setHeroDish] = useState("");
+  const [address, setAddress] = useState("");
   const [verified, setVerified] = useState(false);
 
   const [placeSearch, setPlaceSearch] = useState("");
@@ -334,6 +353,7 @@ export default function AdminPage() {
   const [editImagePreview, setEditImagePreview] = useState("");
   const [editImageFile, setEditImageFile] = useState<File | null>(null);
   const [editHeroDish, setEditHeroDish] = useState("");
+  const [editAddress, setEditAddress] = useState("");
   const [editVerified, setEditVerified] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isUploadingEditImage, setIsUploadingEditImage] = useState(false);
@@ -358,6 +378,12 @@ export default function AdminPage() {
   const [migrationResults, setMigrationResults] = useState<MigrationResult[]>(
     [],
   );
+
+  const [addressBackfillSpots, setAddressBackfillSpots] = useState<AddressBackfillSpot[]>([]);
+  const [isFetchingBackfillSpots, setIsFetchingBackfillSpots] = useState(false);
+  const [isBackfilling, setIsBackfilling] = useState(false);
+  const [backfillProgress, setBackfillProgress] = useState<{ current: number; total: number } | null>(null);
+  const [backfillResults, setBackfillResults] = useState<BackfillResult[]>([]);
 
   const [toast, setToast] = useState<{
     tone: "success" | "error";
@@ -491,7 +517,10 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
-    if (status === "allowed") void fetchLegacySpots();
+    if (status === "allowed") {
+      void fetchLegacySpots();
+      void fetchAddressBackfillSpots();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
@@ -559,6 +588,69 @@ export default function AdminPage() {
     await fetchLegacySpots();
   };
 
+  const fetchAddressBackfillSpots = async () => {
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+    setIsFetchingBackfillSpots(true);
+    const { data } = await supabase
+      .from("spots")
+      .select("id, name, city, place_id")
+      .not("place_id", "is", null)
+      .is("address", null)
+      .order("created_at", { ascending: false });
+    setIsFetchingBackfillSpots(false);
+    setAddressBackfillSpots(
+      (data ?? []).filter(
+        (s): s is AddressBackfillSpot => typeof s.place_id === "string" && s.place_id.trim().length > 0,
+      ),
+    );
+  };
+
+  const backfillAllAddresses = async () => {
+    const supabase = getSupabaseClient();
+    const googlePlaces = window.google?.maps?.places;
+    if (!supabase || !googlePlaces || addressBackfillSpots.length === 0) return;
+    setIsBackfilling(true);
+    setBackfillResults([]);
+    setBackfillProgress({ current: 0, total: addressBackfillSpots.length });
+    const service = new googlePlaces.PlacesService(document.createElement("div"));
+    const results: BackfillResult[] = [];
+    for (let i = 0; i < addressBackfillSpots.length; i++) {
+      const spot = addressBackfillSpots[i];
+      setBackfillProgress({ current: i + 1, total: addressBackfillSpots.length });
+      const result = await new Promise<BackfillResult>((resolve) => {
+        service.getDetails(
+          { placeId: spot.place_id, fields: ["formatted_address"] },
+          async (place, statusCode) => {
+            if (statusCode !== googlePlaces.PlacesServiceStatus.OK || !place?.formatted_address) {
+              resolve({ spotId: spot.id, name: spot.name, status: "skipped", error: "No address returned." });
+              return;
+            }
+            const { error } = await supabase
+              .from("spots")
+              .update({ address: place.formatted_address })
+              .eq("id", spot.id);
+            if (error) {
+              resolve({ spotId: spot.id, name: spot.name, status: "error", error: error.message });
+            } else {
+              resolve({ spotId: spot.id, name: spot.name, status: "success", address: place.formatted_address });
+            }
+          },
+        );
+      });
+      results.push(result);
+      setBackfillResults([...results]);
+    }
+    setIsBackfilling(false);
+    setBackfillProgress(null);
+    const succeeded = results.filter((r) => r.status === "success").length;
+    setToast({
+      tone: succeeded > 0 ? "success" : "error",
+      text: `Backfill complete: ${succeeded}/${results.length} updated.`,
+    });
+    await fetchAddressBackfillSpots();
+  };
+
   const debouncedEditSearchQuery = useDebouncedValue(editSearchQuery, 350);
 
   useEffect(() => {
@@ -572,7 +664,7 @@ export default function AdminPage() {
     setIsSearchingSpots(true);
     supabase
       .from("spots")
-      .select("id, name, city, maps_link, place_id, lat_lng, image, image_storage_id, hero_dish, verified")
+      .select("id, name, city, maps_link, place_id, lat_lng, image, image_storage_id, hero_dish, address, verified")
       .ilike("name", `%${debouncedEditSearchQuery.trim()}%`)
       .order("created_at", { ascending: false })
       .limit(20)
@@ -641,6 +733,7 @@ export default function AdminPage() {
     setEditImagePreview("");
     setEditImageFile(null);
     setEditHeroDish(spot.hero_dish ?? "");
+    setEditAddress(spot.address ?? "");
     setEditVerified(spot.verified);
     setEditPlaceSearch("");
     setEditPlaceSuggestions([]);
@@ -763,6 +856,7 @@ export default function AdminPage() {
       place_id: editPlaceId || null,
       lat_lng: editLatLng || null,
       hero_dish: editHeroDish.trim() || null,
+      address: editAddress.trim() || null,
       verified: editVerified,
     };
     if (newImageStorageId) {
@@ -1041,6 +1135,7 @@ export default function AdminPage() {
       image: null,
       image_storage_id: imageStorageId,
       hero_dish: heroDish.trim() || null,
+      address: address.trim() || null,
       verified,
       created_by: userId,
     });
@@ -1075,6 +1170,7 @@ export default function AdminPage() {
     setImagePreview("");
     setImageFile(null);
     setHeroDish("");
+    setAddress("");
     setVerified(false);
     setPlaceSearch("");
     setPlaceSuggestions([]);
@@ -1369,6 +1465,98 @@ export default function AdminPage() {
       </section>
       ) : null}
 
+      {activeSection === "backfill-addresses" ? (
+      <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-white/10 dark:bg-white/5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">Backfill Addresses</h2>
+            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+              Spots with a Google Place ID but no address yet. Uses the Places API to fetch and save <code className="rounded bg-neutral-200 px-1 dark:bg-white/10">formatted_address</code> for each.
+            </p>
+          </div>
+        </div>
+
+        {!placesReady ? (
+          <p className="mt-4 text-xs text-neutral-500 dark:text-neutral-400">
+            Google Places must be loaded to run backfill. {saveStatusHint}
+          </p>
+        ) : isFetchingBackfillSpots ? (
+          <div className="mt-4 inline-flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700 dark:border-neutral-600 dark:border-t-neutral-100" />
+            Loading spots...
+          </div>
+        ) : addressBackfillSpots.length === 0 ? (
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              All spots with a Place ID already have an address.
+            </p>
+            <button
+              type="button"
+              onClick={() => void fetchAddressBackfillSpots()}
+              disabled={isFetchingBackfillSpots}
+              className="shrink-0 rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-700 transition-colors hover:bg-neutral-100 disabled:opacity-60 dark:border-white/15 dark:text-neutral-200 dark:hover:bg-white/10"
+            >
+              Refresh
+            </button>
+          </div>
+        ) : (
+          <div className="mt-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => void backfillAllAddresses()}
+                disabled={isBackfilling}
+                className="rounded-lg border border-neutral-900 bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 dark:border-white/20 dark:bg-white dark:text-black"
+              >
+                {isBackfilling
+                  ? `Backfilling ${backfillProgress?.current ?? 0}/${backfillProgress?.total ?? 0}...`
+                  : `Backfill all (${addressBackfillSpots.length} spots)`}
+              </button>
+              <button
+                type="button"
+                onClick={() => void fetchAddressBackfillSpots()}
+                disabled={isFetchingBackfillSpots || isBackfilling}
+                className="rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-700 transition-colors hover:bg-neutral-100 disabled:opacity-60 dark:border-white/15 dark:text-neutral-200 dark:hover:bg-white/10"
+              >
+                Refresh
+              </button>
+            </div>
+
+            <div className="max-h-48 space-y-1 overflow-y-auto">
+              {addressBackfillSpots.map((spot) => {
+                const result = backfillResults.find((r) => r.spotId === spot.id);
+                return (
+                  <div
+                    key={spot.id}
+                    className="flex items-center justify-between gap-2 rounded border border-neutral-200 px-2 py-1.5 text-xs dark:border-white/10"
+                  >
+                    <span className="truncate text-neutral-700 dark:text-neutral-200">
+                      {spot.name}{" "}
+                      <span className="text-neutral-400 dark:text-neutral-500">({spot.city})</span>
+                    </span>
+                    {result ? (
+                      <span
+                        className={
+                          result.status === "success"
+                            ? "shrink-0 text-green-400"
+                            : result.status === "skipped"
+                              ? "shrink-0 text-yellow-500"
+                              : "shrink-0 text-red-400"
+                        }
+                        title={result.address ?? result.error}
+                      >
+                        {result.status === "success" ? "Done" : result.status === "skipped" ? "Skipped" : "Failed"}
+                      </span>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </section>
+      ) : null}
+
       {activeSection === "add-spot" ? (
       <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-white/10 dark:bg-white/5">
         <h2 className="text-sm font-semibold">Add Spot</h2>
@@ -1524,6 +1712,17 @@ export default function AdminPage() {
             value={heroDish}
             onChange={(event) => setHeroDish(event.target.value)}
             placeholder="Spicy vodka rigatoni"
+            className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500"
+          />
+        </label>
+
+        <label className="block text-sm">
+          <span className="mb-1 block">Address (optional)</span>
+          <input
+            type="text"
+            value={address}
+            onChange={(event) => setAddress(event.target.value)}
+            placeholder="123 Main St, New York, NY 10001"
             className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500"
           />
         </label>
@@ -1831,6 +2030,17 @@ export default function AdminPage() {
                   value={editHeroDish}
                   onChange={(e) => setEditHeroDish(e.target.value)}
                   placeholder="Spicy vodka rigatoni"
+                  className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500"
+                />
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-1 block">Address (optional)</span>
+                <input
+                  type="text"
+                  value={editAddress}
+                  onChange={(e) => setEditAddress(e.target.value)}
+                  placeholder="123 Main St, New York, NY 10001"
                   className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder:text-neutral-400 dark:border-white/15 dark:bg-black/20 dark:placeholder:text-neutral-500"
                 />
               </label>

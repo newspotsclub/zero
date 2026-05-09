@@ -55,7 +55,7 @@ export function useSpots(selectedCity: string, page: number) {
     let query = supabase
       .from("spots")
       .select(
-        "id, name, city, maps_link, lat_lng, image, image_storage_id, verified, hero_dish",
+        "id, name, city, maps_link, lat_lng, image, image_storage_id, verified, hero_dish, address",
         {
         count: "exact",
         }
