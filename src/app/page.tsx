@@ -32,6 +32,7 @@ export default function Home() {
 
   const [selectedCity, setSelectedCity] = useState("All");
   const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedSpot, setSelectedSpot] = useState<import("@/types/home").HomeSpot | null>(null);
   const [openAddMenuSpotId, setOpenAddMenuSpotId] = useState<number | null>(null);
   const [addActionBusyKey, setAddActionBusyKey] = useState<string | null>(null);
@@ -51,7 +52,7 @@ export default function Home() {
     isSpotsLoading,
     spotsError,
     setSpotsError,
-  } = useSpots(selectedCity, page);
+  } = useSpots(selectedCity, page, searchQuery);
 
   const isAdmin = profile.userRole === "admin";
   const publicList = profileLists.find((l) => l.visibility === "public");
@@ -155,6 +156,12 @@ export default function Home() {
     setPage(1);
     setOpenAddMenuSpotId(null);
     setSelectedSpot(null);
+  };
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+    setPage(1);
+    setOpenAddMenuSpotId(null);
   };
 
   const toggleSpotInList = async (
@@ -297,6 +304,30 @@ export default function Home() {
             onSelect={handleFilterChange}
           />
 
+          <div className="relative mb-4 mt-3">
+            <svg
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400"
+              width="16"
+              height="16"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="8.5" cy="8.5" r="5.5" />
+              <line x1="13.5" y1="13.5" x2="18" y2="18" />
+            </svg>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={handleSearchChange}
+              placeholder="Search by name or address..."
+              className="w-full rounded-none border border-black/20 bg-white/70 py-2 pl-9 pr-4 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-black/40 focus:outline-none"
+            />
+          </div>
+
           {isSpotsLoading ? (
             <div className="grid grid-cols-2 gap-2 md:grid-cols-3 md:gap-4">
               {Array.from({ length: PAGE_SIZE }).map((_, i) => (
@@ -362,7 +393,9 @@ export default function Home() {
             </div>
           ) : (
             <div className="border border-black/20 bg-white/60 p-6 text-sm text-neutral-600">
-              No spots found for this filter.
+              {searchQuery.trim().length >= 2
+                ? `No spots found for "${searchQuery.trim()}".`
+                : "No spots found for this filter."}
             </div>
           )}
 
